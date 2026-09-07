@@ -1,15 +1,43 @@
 {
-  "name": "openaether-cli",
+  "name": "openaether",
   "version": "1.0.0",
-  "description": "AI coding CLI powered by OpenRouter",
+  "description": "AI coding CLI powered by OpenRouter - Free and open source",
   "type": "module",
-  "main": "src/cli.ts",
+  "main": "dist/cli.js",
+  "bin": {
+    "openaether": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
-    "start": "tsx src/cli.ts",
     "dev": "tsx src/cli.ts",
     "chat": "tsx src/cli.ts --chat",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "cli",
+    "coding",
+    "assistant",
+    "openrouter",
+    "llm",
+    "terminal",
+    "developer-tools"
+  ],
+  "author": "Saad Asim",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Muhammad-Saad-786/openaether-cli"
+  },
+  "homepage": "https://github.com/Muhammad-Saad-786/openaether-cli#readme",
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "chalk": "^5.3.0",

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from "commander";
 import { buildContext } from "./conversation/context.js";
 import { SYSTEM_PROMPT } from "./conversation/prompts.js";
