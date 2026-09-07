@@ -5,7 +5,7 @@ import Spinner from "ink-spinner";
 import SelectInput from "ink-select-input";
 import type { QueryEngine } from "./core/engine.js";
 import { toolRegistry } from "./tools/registry.js";
-import { cleanMarkdown } from "./utils/markdown.ts";
+import { cleanMarkdown } from "./utils/markdown.js";
 
 const FREE_MODELS = [
   // Meta Llama Models
