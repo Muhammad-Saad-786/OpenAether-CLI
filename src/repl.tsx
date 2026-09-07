@@ -5,6 +5,7 @@ import Spinner from "ink-spinner";
 import SelectInput from "ink-select-input";
 import type { QueryEngine } from "./core/engine.js";
 import { toolRegistry } from "./tools/registry.js";
+import { cleanMarkdown } from "./utils/markdown.ts";
 
 const FREE_MODELS = [
   // Meta Llama Models
@@ -248,7 +249,7 @@ function MessageBubble({ message }: { message: Message }) {
       <Text color={isUser ? "green" : "cyan"} bold>
         {isUser ? "You> " : "AI> "}
       </Text>
-      <Text>{message.content}</Text>
+      <Text>{cleanMarkdown(message.content)}</Text>
       {message.streaming && <Text color="yellow">▋</Text>}
     </Box>
   );
