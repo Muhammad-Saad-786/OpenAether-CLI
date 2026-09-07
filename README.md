@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Muhammad-Saad-786/openaether-cli/media/openaether-banner.png" alt="OpenAether CLI Banner" width="600">
+  <img src="https://github.com/Muhammad-Saad-786/OpenAether-CLI/blob/main/media/openaether-banner.png" alt="OpenAether CLI Banner" width="600">
   
   # OpenAether CLI
   
