@@ -1,6 +1,6 @@
 {
   "name": "openaether",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "AI coding CLI powered by OpenRouter - Free and open source",
   "type": "module",
   "main": "dist/cli.js",
