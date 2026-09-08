@@ -154,6 +154,13 @@ OPENROUTER_MODEL=qwen/qwen-3-coder:free
 openaether
 ```
 
+On the first interactive launch, OpenAether opens a key setup menu before the
+agent starts. You can enter a Groq key, an OpenRouter key, or both. Use `/save`
+to write them to `.env` in the current directory, `/help` to see the menu, or
+`/skip` to continue without saving. Key input is masked. The `.env` file is
+ignored by Git and is written with private file permissions where supported;
+keep it private and never commit it.
+
 #### One-Shot Query
 
 ```bash
@@ -212,28 +219,20 @@ GROQ_MODEL=openai/gpt-oss-120b
 
 Available Groq model IDs:
 
-| Model ID                              | Best For                                            | Tool Calling        |
-| ------------------------------------- | --------------------------------------------------- | ------------------- |
-| `openai/gpt-oss-120b`                 | Complex coding, debugging, and reasoning            | Yes                 |
-| `openai/gpt-oss-20b`                  | Fast coding and everyday development tasks          | Yes                 |
-| `openai/gpt-oss-safeguard-20b`        | Safety-focused classification and guarded responses | Check model support |
-| `qwen/qwen3.6-27b`                    | Coding and technical questions                      | Yes                 |
-| `qwen/qwen3.8-27b`                    | Coding and general technical work                   | Yes                 |
-| `groq/compound`                       | Fast general chat and answers                       | No                  |
-| `groq/compound-mini`                  | Fast, lightweight chat                              | No                  |
-| `allam-2-7b`                          | Arabic and multilingual prompts                     | Check model support |
-| `canopylabs/orpheus-arabic-saudi`     | Arabic voice and speech workloads                   | Not a chat model    |
-| `canopylabs/orpheus-v1-english`       | English voice and speech workloads                  | Not a chat model    |
-| `meta-llama/llama-prompt-guard-2-22m` | Prompt-injection detection                          | Not a chat model    |
-| `meta-llama/llama-prompt-guard-2-86m` | Prompt-injection detection                          | Not a chat model    |
-| `whisper-large-v3`                    | Speech-to-text transcription                        | Not a chat model    |
-| `whisper-large-v3-turbo`              | Faster speech-to-text transcription                 | Not a chat model    |
+| Model ID                       | Best For                                            | Tool Calling        |
+| ------------------------------ | --------------------------------------------------- | ------------------- |
+| `openai/gpt-oss-120b`          | Complex coding, debugging, and reasoning            | Yes                 |
+| `openai/gpt-oss-20b`           | Fast coding and everyday development tasks          | Yes                 |
+| `openai/gpt-oss-safeguard-20b` | Safety-focused classification and guarded responses | Check model support |
+| `qwen/qwen3.6-27b`             | Coding and technical questions                      | Yes                 |
+| `qwen/qwen3.8-27b`             | Coding and general technical work                   | Yes                 |
+| `groq/compound`                | General chat and answers                            | No                  |
+| `groq/compound-mini`           | Lightweight chat                                    | No                  |
 
 The CLI's file, search, and shell tools require a model that supports tool
 calling. Use `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, or a compatible Qwen
-model for tool-based coding tasks. `groq/compound` and
-`groq/compound-mini` are available for chat, but Groq rejects tool definitions
-for those models.
+model for tool-based coding tasks. Compound and Compound Mini remain available
+for fast chat, but they do not receive coding tool definitions.
 
 Switch models anytime using:
 
@@ -342,9 +341,9 @@ OpenAether uses environment variables.
 | `GROQ_API_KEY`           | For Groq       | —                                |
 | `PROVIDER`               | No             | Auto-detected                    |
 | `OPENROUTER_MODEL`       | No             | `qwen/qwen-2.5-7b-instruct:free` |
-| `GROQ_MODEL`             | No             | `groq/compound-mini`             |
+| `GROQ_MODEL`             | No             | `openai/gpt-oss-120b`            |
 | `OPENROUTER_MAX_TOKENS`  | No             | `4000`                           |
-| `GROQ_MAX_TOKENS`        | No             | `4000`                           |
+| `GROQ_MAX_TOKENS`        | No             | `5000`                           |
 | `OPENROUTER_TEMPERATURE` | No             | `0.5`                            |
 | `GROQ_TEMPERATURE`       | No             | `0.5`                            |
 | `OPENROUTER_SITE_URL`    | No             | —                                |

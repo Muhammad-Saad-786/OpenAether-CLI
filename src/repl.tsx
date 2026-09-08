@@ -9,15 +9,15 @@ import { cleanMarkdown } from "./utils/markdown.js";
 import { GroqProvider } from "./provider/groq.js";
 import { createGroqProvider, createProvider } from "./provider/client.js";
 import { loadConfig } from "./config.js";
+import { parseToolArguments } from "./utils/tool-args.js";
 
 const GROQ_MODELS = [
   { label: "GPT-OSS 20B", value: "openai/gpt-oss-20b" },
   { label: "GPT-OSS 120B", value: "openai/gpt-oss-120b" },
-  { label: "Compound", value: "groq/compound" },
-  { label: "Compound Mini", value: "groq/compound-mini" },
+  { label: "Compound (chat)", value: "groq/compound" },
+  { label: "Compound Mini (chat)", value: "groq/compound-mini" },
   { label: "Qwen 3.6 27B", value: "qwen/qwen3.6-27b" },
   { label: "Qwen 3.8 27B", value: "qwen/qwen3.8-27b" },
-  { label: "Allam 2 7B", value: "allam-2-7b" },
   { label: "Llama 3.3 70B", value: "llama-3.3-70b-versatile" },
   { label: "Llama 3.1 8B", value: "llama-3.1-8b-instant" },
 ];
@@ -151,6 +151,30 @@ function CommandSuggestions({ input }: { input: string }) {
   );
 }
 
+function summarizeAction(
+  toolName: string,
+  args: Record<string, unknown>,
+  result: string,
+): string {
+  const target = typeof args.path === "string" ? args.path : "";
+  if (toolName === "write_file") {
+    return `${result.startsWith("Updated") ? "Updated" : "Created"} ${target}`;
+  }
+  if (toolName === "edit_file") return `Updated ${target}`;
+  if (toolName === "delete_file") return `Deleted ${target}`;
+  if (toolName === "read_file") return `Read ${target}`;
+  if (toolName === "merge_files") {
+    const sources = Array.isArray(args.sources) ? args.sources.length : 0;
+    return `Merged ${sources} file${sources === 1 ? "" : "s"} into ${String(args.target ?? "target")}`;
+  }
+  if (toolName === "glob")
+    return `Found files matching ${String(args.pattern ?? "pattern")}`;
+  if (toolName === "grep")
+    return `Searched for ${String(args.pattern ?? "pattern")}`;
+  if (toolName === "bash") return `Ran command: ${String(args.command ?? "")}`;
+  return `${toolName} completed`;
+}
+
 function ModelSelector({
   onSelect,
 }: {
@@ -200,6 +224,9 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingPhase, setLoadingPhase] = useState<
+    "request" | "tools" | "final" | "waiting"
+  >("request");
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [currentModel, setCurrentModel] = useState(engine.options.model);
   const [currentProvider, setCurrentProvider] = useState(
@@ -312,6 +339,7 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
     setMessages((prev) => [...prev, { role: "user", content: value }]);
     setInput("");
     setIsLoading(true);
+    setLoadingPhase("request");
     setStreamingMessage("");
 
     try {
@@ -319,15 +347,30 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
 
       let isComplete = false;
       let maxIterations = 10;
+      let toolsExecuted = false;
+      const completedActions: string[] = [];
 
       while (!isComplete && maxIterations > 0) {
         maxIterations--;
+        setLoadingPhase(toolsExecuted ? "final" : "request");
 
         const stream = engine.provider.stream(engine.messages, {
           model: currentModel,
-          maxTokens: engine.options.maxTokens,
+          maxTokens: toolsExecuted
+            ? Math.min(engine.options.maxTokens, 512)
+            : engine.options.maxTokens,
           temperature: engine.options.temperature,
-          tools: toolRegistry.toOpenAIFormat(),
+          tools: toolsExecuted ? [] : toolRegistry.toOpenAIFormat(),
+          onRateLimit: (delayMs: number) => {
+            setLoadingPhase("waiting");
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: `Rate limit reached. Retrying in ${Math.ceil(delayMs / 1000)}s...`,
+              },
+            ]);
+          },
         });
 
         let fullText = "";
@@ -391,18 +434,16 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
           tool_calls: toolCalls,
         });
 
-        // Execute tools
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "🔧 Executing tools..." },
-        ]);
+        // Execute tools without adding noisy intermediate messages to the chat.
+        setLoadingPhase("tools");
+        toolsExecuted = true;
 
         for (const toolCall of toolCalls) {
           const toolName = toolCall.function.name;
           let toolArgs: any = {};
 
           try {
-            toolArgs = JSON.parse(toolCall.function.arguments || "{}");
+            toolArgs = parseToolArguments(toolCall.function.arguments);
           } catch {
             toolArgs = {};
           }
@@ -417,14 +458,11 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
                 tool_call_id: toolCall.id,
                 content: result.content || result.error || "Tool executed",
               });
-
-              setMessages((prev) => [
-                ...prev,
-                {
-                  role: "assistant",
-                  content: `✅ ${toolName}: ${(result.content || "").substring(0, 200)}`,
-                },
-              ]);
+              if (result.success && result.content) {
+                completedActions.push(
+                  summarizeAction(toolName, toolArgs, result.content),
+                );
+              }
             } catch (error) {
               engine.messages.push({
                 role: "tool",
@@ -434,6 +472,23 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
             }
           }
         }
+      }
+
+      if (completedActions.length > 0) {
+        setMessages((prev) => {
+          const finalMessage = prev[prev.length - 1];
+          const summary = `Completed:\n${completedActions
+            .map((action) => `- ${action}`)
+            .join("\n")}`;
+          if (finalMessage?.role !== "assistant") {
+            return [...prev, { role: "assistant", content: summary }];
+          }
+          return prev.map((message, index) =>
+            index === prev.length - 1
+              ? { ...message, content: `${message.content}\n\n${summary}` }
+              : message,
+          );
+        });
       }
 
       if (maxIterations === 0) {
@@ -451,8 +506,9 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
         },
       ]);
     } finally {
-      setIsLoading(false);
       setStreamingMessage("");
+      setLoadingPhase("request");
+      setIsLoading(false);
     }
   };
 
@@ -479,7 +535,15 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
             <Text color="yellow">
               <Spinner type="dots" />
             </Text>
-            <Text dimColor> Thinking...</Text>
+            <Text dimColor>
+              {loadingPhase === "tools"
+                ? " Running tools..."
+                : loadingPhase === "final"
+                  ? " Finishing response..."
+                  : loadingPhase === "waiting"
+                    ? " Waiting for rate limit..."
+                    : " Thinking..."}
+            </Text>
           </Box>
         )}
       </Box>

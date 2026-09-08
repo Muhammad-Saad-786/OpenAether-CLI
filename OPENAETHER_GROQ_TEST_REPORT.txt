@@ -1,0 +1,343 @@
+OPENAETHER GROQ MODEL TEST REPORT
+=================================
+Date: 2026-09-08
+Package tested: openaether 3.0.0
+Provider: Groq
+
+Purpose
+-------
+This report documents testing OpenAether as a Claude-Code-style coding agent.
+The tests checked model switching and whether models could use OpenAether tools
+for file and workspace operations.
+
+The API key was supplied through the GROQ_API_KEY environment variable during
+testing. It is intentionally not written in this report. Because the key was
+pasted into a chat/session, rotate it before using the CLI in production.
+
+LOCAL TOOL REGRESSION
+---------------------
+The local tool registry test passed for:
+
+  - create: write_file
+  - update: edit_file
+  - find: glob
+  - find: grep
+  - merge: merge_files
+
+Registered tools in OpenAether 3.0.0:
+
+  read_file, write_file, edit_file, grep, glob, bash, merge_files
+
+Important limitation:
+
+  delete_file is NOT registered in OpenAether 3.0.0.
+
+Therefore the agent cannot perform a dedicated delete-file tool call. It may be
+able to delete files through the bash tool, but that is a different capability
+and should be protected with confirmation and path-safety checks.
+
+MODEL TEST METHOD
+-----------------
+Each documented Groq model was called through OpenAether's actual GroqProvider
+and query engine. The prompt asked the model to:
+
+  Use the glob tool with pattern '*.md', then reply with exactly TOOL_OK.
+
+This tests real tool definitions, model-generated tool calls, tool execution,
+and the follow-up response round.
+
+SUCCESSFUL TOOL-CALLING MODELS
+------------------------------
+1. openai/gpt-oss-120b
+   - Successfully called glob.
+   - Returned TOOL_OK after tool execution.
+   - Recommended primary agentic coding model.
+
+2. openai/gpt-oss-20b
+   - Successfully called glob.
+   - Returned TOOL_OK after tool execution.
+   - Recommended fast coding and lower-cost model.
+
+3. qwen/qwen3.6-27b
+   - Successfully called glob.
+   - Returned TOOL_OK after tool execution.
+   - Good coding and technical explanation option.
+
+4. qwen/qwen3.8-27b
+   - Successfully called glob.
+   - Returned TOOL_OK after tool execution.
+   - Strong alternative for coding and explanations.
+
+MODEL THAT ATTEMPTED TOOL USE BUT FAILED
+----------------------------------------
+openai/gpt-oss-safeguard-20b
+
+The model attempted to call glob, but generated:
+
+  maxResults: null
+
+Groq rejected the call because the tool schema expected maxResults to be a
+number when present. This is a model/tool-schema compatibility issue, not an
+API-key issue.
+
+Possible fixes:
+
+  - Tell the model in the system prompt to omit optional parameters rather than
+    sending null.
+  - Normalize tool-call JSON before validation by removing object properties
+    whose value is null.
+  - Make the schema explicitly accept null if the tool implementation supports
+    it, for example with an anyOf/type definition.
+  - Add a retry path that reports the invalid argument and asks the model to
+    regenerate the call.
+
+MODELS THAT DID NOT COMPLETE THE TOOL TEST
+------------------------------------------
+groq/compound
+  - OpenAether intentionally omits tool definitions for this model.
+  - The live request failed because Groq routed it to an internal model blocked
+    by the organization settings.
+  - Treat this as chat-only unless the account/model access is verified.
+
+ groq/compound-mini
+  - Same behavior as groq/compound.
+  - The internal model was blocked by organization settings.
+  - Treat this as chat-only unless access is verified.
+
+allam-2-7b
+  - Groq returned a permissions error: model blocked at organization level.
+  - This is an account/org configuration issue, not an OpenAether tool bug.
+
+canopylabs/orpheus-arabic-saudi
+  - Groq required terms acceptance.
+  - It is a speech/audio model, not a coding chat model.
+
+canopylabs/orpheus-v1-english
+  - Groq required terms acceptance.
+  - It is a speech/audio model, not a coding chat model.
+
+meta-llama/llama-prompt-guard-2-22m
+  - Groq rejected the request because tool calling is unsupported.
+  - This is a prompt-injection classification model, not an agentic coding model.
+
+meta-llama/llama-prompt-guard-2-86m
+  - Groq rejected the request because tool calling is unsupported.
+  - This is a prompt-injection classification model, not an agentic coding model.
+
+whisper-large-v3
+  - Groq rejected the request because the model does not support chat completions.
+  - It is a speech-to-text model and requires the audio transcription API.
+
+whisper-large-v3-turbo
+  - Same as whisper-large-v3.
+  - It must not be exposed as a chat or coding model.
+
+RECOMMENDED MODEL ROLES
+-----------------------
+Primary agentic coding:
+
+  openai/gpt-oss-120b
+
+Use this for multi-step work involving reading, searching, editing, merging,
+running commands, debugging, and reasoning across several files.
+
+Fast agentic coding:
+
+  openai/gpt-oss-20b
+
+Use this for routine edits, small bug fixes, simple file operations, and quick
+iterations where latency matters more than maximum reasoning quality.
+
+Coding and technical explanations:
+
+  qwen/qwen3.8-27b
+  qwen/qwen3.6-27b
+
+These successfully used tools and are suitable for explaining code, planning
+changes, and performing normal coding tasks.
+
+Chat-only or general explanation:
+
+  groq/compound
+  groq/compound-mini
+
+Only use these after confirming the underlying model is available to the Groq
+organization. Do not send tool definitions to them. They are not suitable for
+file-editing agent workflows.
+
+Models to hide from the coding-agent model selector:
+
+  - Whisper models
+  - Orpheus speech models
+  - Prompt Guard models
+  - Models blocked by the current Groq organization
+  - Any model whose Groq metadata says chat or tool calling is unsupported
+
+OPENAETHER IMPLEMENTATION ISSUES TO FIX
+---------------------------------------
+1. Add model capability metadata
+
+The current provider has a hard-coded rule that excludes only:
+
+  groq/compound
+  groq/compound-mini
+
+Instead, define capabilities for each model:
+
+  - chatCompletions
+  - toolCalling
+  - textGeneration
+  - audioInput
+  - audioOutput
+  - maxTokens
+  - availability status
+
+Use these capabilities when displaying models and when constructing requests.
+
+2. Prevent unsupported model requests
+
+Before sending a request, reject or disable models that do not support chat
+completions or tool calling. Show a useful message such as:
+
+  This model supports transcription, not coding chat.
+
+Do not wait for a confusing provider 400 error.
+
+3. Normalize null tool arguments
+
+Some models send optional arguments as null. Before executing a tool, remove
+null properties or validate them consistently. For example:
+
+  { pattern: "*.md", maxResults: null }
+
+should become:
+
+  { pattern: "*.md" }
+
+Only do this for optional properties. Required null values should produce a
+clear validation error and a retry request.
+
+4. Add tool-call retry handling
+
+When Groq returns a tool_use_failed error caused by malformed arguments:
+
+  - preserve the conversation
+  - explain the invalid argument briefly to the model
+  - request a corrected tool call
+  - cap retries to avoid loops
+
+5. Add a real delete_file tool
+
+The current registry has read, write, edit, search, shell, and merge tools but
+no delete tool. Add delete_file with:
+
+  - path validation
+  - workspace-root restriction
+  - refusal to delete directories unless explicitly supported
+  - confirmation policy for important files
+  - clear success/error responses
+
+6. Protect the bash tool
+
+Because bash can already delete files and run arbitrary commands, add:
+
+  - workspace-root restrictions
+  - command confirmation for destructive commands
+  - timeout limits
+  - output limits
+  - blocked command patterns where appropriate
+  - clear display of the command before execution
+
+7. Improve model discovery
+
+The README model list can become stale. Prefer Groq model metadata or a
+maintained capability map, then filter by actual model support. Do not list
+speech and classification models beside coding models without category labels.
+
+8. Improve provider errors
+
+Convert Groq errors into short user-facing categories:
+
+  - authentication error
+  - model unavailable
+  - organization permission denied
+  - terms acceptance required
+  - chat unsupported
+  - tool calling unsupported
+  - invalid tool arguments
+  - rate limit
+
+Keep detailed provider diagnostics available in debug logs, but avoid dumping
+large stack traces into normal CLI output.
+
+9. Keep system prompts intact when intended
+
+The tested Groq provider filters out messages with role "system" before sending
+them. Verify whether this is intentional. If the system prompt contains the
+agent identity, safety rules, tool usage instructions, or workspace policy,
+removing it can reduce reliability. If Groq requires a different message shape,
+translate it rather than silently dropping it.
+
+10. Test complete workflows, not only one tool
+
+Add automated tests for these sequences in a disposable workspace:
+
+  - find a file
+  - read it
+  - create a new file
+  - update the file
+  - merge files
+  - run a safe command
+  - delete a disposable file
+  - report the final state
+
+Run the workflow against each model marked tool-capable.
+
+SUGGESTED DEFAULTS
+------------------
+For a new OpenAether installation:
+
+  PROVIDER=groq
+  GROQ_MODEL=openai/gpt-oss-120b
+
+For a fast mode:
+
+  GROQ_MODEL=openai/gpt-oss-20b
+
+For explanation mode:
+
+  GROQ_MODEL=qwen/qwen3.8-27b
+
+Do not default to groq/compound-mini for an agent that needs tools. The package
+documentation currently lists it as the default Groq model, but it is chat-only
+and may route to an organization-blocked underlying model.
+
+REPRODUCIBLE TEST COMMANDS
+---------------------------
+Run the local tool test:
+
+  node .\test.js
+
+Run the complete Groq model matrix with the key supplied only in memory:
+
+  $env:GROQ_API_KEY="your-key"
+  node .\groq-model-test.js
+  Remove-Item Env:GROQ_API_KEY
+
+Never commit API keys to source files, README files, test fixtures, shell
+profiles, or npm package contents.
+
+FINAL SUMMARY
+-------------
+The strongest tested agentic models are:
+
+  1. openai/gpt-oss-120b
+  2. qwen/qwen3.8-27b
+  3. qwen/qwen3.6-27b
+  4. openai/gpt-oss-20b for speed
+
+The most immediate reliability bug is malformed optional tool arguments such as
+maxResults: null. The most visible product issue is exposing non-chat, blocked,
+and non-tool models as if they were coding-agent models. Capability-aware model
+filtering, argument normalization, delete_file support, and clearer error
+messages should be the first fixes.

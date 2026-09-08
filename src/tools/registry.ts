@@ -6,6 +6,7 @@ import { GlobTool } from "./glob.js";
 import { GrepTool } from "./grep.js";
 import { MergeTool } from "./merge.js";
 import { FileWriteTool } from "./file-write.js";
+import { FileDeleteTool } from "./file-delete.js";
 import type { Tool } from "./types.js";
 
 export class ToolRegistry {
@@ -15,6 +16,7 @@ export class ToolRegistry {
     for (const tool of [
       new FileReadTool(),
       new FileWriteTool(),
+      new FileDeleteTool(),
       new FileEditTool(),
       new GrepTool(),
       new GlobTool(),

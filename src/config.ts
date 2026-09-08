@@ -27,12 +27,12 @@ export function loadConfig(): Config {
       process.env.OPENROUTER_MODEL ||
       process.env.GROQ_MODEL ||
       (provider === "groq"
-        ? "groq/compound-mini"
+        ? "openai/gpt-oss-120b"
         : "qwen/qwen-2.5-7b-instruct:free"),
     maxTokens: parseInt(
       process.env.OPENROUTER_MAX_TOKENS ||
         process.env.GROQ_MAX_TOKENS ||
-        "4000",
+        (provider === "groq" ? "5000" : "4000"),
     ),
     temperature: parseFloat(
       process.env.OPENROUTER_TEMPERATURE ||

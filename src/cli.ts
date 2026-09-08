@@ -8,8 +8,11 @@ import { createProvider } from "./provider/client.js";
 import { startRepl } from "./repl.js";
 import { toolRegistry } from "./tools/registry.js";
 import { formatProviderError } from "./utils/errors.js";
+import { loadSavedEnvironment, runFirstRunSetup } from "./setup.js";
 
 export async function startCli(argv = process.argv): Promise<void> {
+  loadSavedEnvironment();
+  await runFirstRunSetup();
   const config = loadConfig();
   const program = new Command()
     .name("openaether")

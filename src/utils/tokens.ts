@@ -3,10 +3,10 @@ export function estimateTokens(text: string): number {
 }
 
 export function estimateMessagesTokens(
-  messages: Array<{ content: string | null }>,
+  messages: Array<Record<string, unknown>>,
 ): number {
   return messages.reduce(
-    (total, message) => total + estimateTokens(message.content ?? "") + 4,
+    (total, message) => total + estimateTokens(JSON.stringify(message)) + 4,
     2,
   );
 }

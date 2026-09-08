@@ -1,7 +1,8 @@
 import type { OpenRouterProvider } from "../provider/openrouter.js";
 import type { ToolRegistry } from "../tools/registry.js";
-import type { Message, CompletionOptions } from "../provider/types.js";
+import type { Message, ToolUse } from "../provider/types.js";
 import chalk from "chalk";
+import { parseToolArguments } from "../utils/tool-args.js";
 
 export interface QueryEngineOptions {
   model: string;
@@ -31,26 +32,74 @@ export class QueryEngine {
     this.messages.push({ role: "user", content: prompt });
 
     try {
-      const stream = this.provider.stream(this.messages, {
-        model: this.options.model,
-        maxTokens: this.options.maxTokens,
-        temperature: this.options.temperature,
-        tools: this.tools.toOpenAIFormat(),
-      });
+      for (let round = 0; round < 10; round++) {
+        const stream = this.provider.stream(this.messages, {
+          model: this.options.model,
+          maxTokens: this.options.maxTokens,
+          temperature: this.options.temperature,
+          tools:
+            round > 0
+              ? this.tools.toOpenAIFormat()
+              : this.tools.toOpenAIFormat(),
+        });
 
-      let fullResponse = "";
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content;
-        if (content) {
-          fullResponse += content;
-          process.stdout.write(chalk.green(content));
+        let fullResponse = "";
+        const toolCalls = new Map<number, ToolUse>();
+        for await (const chunk of stream) {
+          const delta = chunk.choices?.[0]?.delta;
+          if (delta?.content) {
+            fullResponse += delta.content;
+            process.stdout.write(chalk.green(delta.content));
+          }
+          for (const part of delta?.tool_calls ?? []) {
+            const index = part.index ?? toolCalls.size;
+            const existing = toolCalls.get(index);
+            if (!existing) {
+              toolCalls.set(index, {
+                id: part.id || `call_${index}`,
+                type: "function",
+                function: {
+                  name: part.function?.name || "",
+                  arguments: part.function?.arguments || "",
+                },
+              });
+            } else {
+              existing.function.name ||= part.function?.name || "";
+              existing.function.arguments += part.function?.arguments || "";
+            }
+          }
+        }
+
+        const calls = [...toolCalls.values()];
+        if (!calls.length) {
+          if (fullResponse)
+            this.messages.push({ role: "assistant", content: fullResponse });
+          console.log("\n");
+          return;
+        }
+
+        this.messages.push({
+          role: "assistant",
+          content: fullResponse || null,
+          tool_calls: calls,
+        });
+        for (const call of calls) {
+          let args: Record<string, unknown>;
+          try {
+            args = parseToolArguments(call.function.arguments);
+          } catch {
+            args = {};
+          }
+          const result = await this.tools.execute(call.function.name, args);
+          this.messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            name: call.function.name,
+            content: result,
+          });
         }
       }
-
-      if (fullResponse) {
-        this.messages.push({ role: "assistant", content: fullResponse });
-      }
-      console.log("\n");
+      throw new Error("Maximum tool-call rounds exceeded");
     } catch (error) {
       console.error(
         chalk.red("Error:"),

@@ -2,6 +2,7 @@ import type { OpenRouterProvider } from "../provider/openrouter.js";
 import type { Message } from "../provider/types.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { collectStream } from "../utils/streaming.js";
+import { parseToolArguments } from "../utils/tool-args.js";
 
 export type QueryOptions = {
   model: string;
@@ -31,7 +32,7 @@ export async function query(
       try {
         result = await tools.execute(
           call.function.name,
-          JSON.parse(call.function.arguments) as Record<string, unknown>,
+          parseToolArguments(call.function.arguments),
         );
       } catch (error) {
         result = `Tool error: ${error instanceof Error ? error.message : String(error)}`;
