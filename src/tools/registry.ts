@@ -37,7 +37,7 @@ export class ToolRegistry {
     return [...this.tools.values()];
   }
 
-  toOpenAIFormat(): ToolDefinition[] {
+  toOpenAIFormat(): any[] {
     return this.getAll().map((tool) => ({
       type: "function",
       function: {

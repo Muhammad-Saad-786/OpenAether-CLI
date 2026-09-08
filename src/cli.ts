@@ -35,7 +35,7 @@ export async function startCli(argv = process.argv): Promise<void> {
       const systemPrompt =
         options.systemPrompt ?? `${SYSTEM_PROMPT}\n\n${await buildContext()}`;
       const engine = new QueryEngine(
-        provider,
+        provider as any,
         toolRegistry,
         {
           model: options.model,

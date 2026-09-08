@@ -102,13 +102,15 @@ npm uninstall -g openaether
 
 ### Step 1: Get Your Free API Key
 
-1. Visit **[OpenRouter.ai](https://openrouter.ai)**
-2. Click **Sign Up** (free account)
-3. Navigate to **[API Keys](https://openrouter.ai/keys)**
-4. Click **Create Key**
-5. Copy your key (starts with `sk-or-v1-`)
+1. Visit OpenRouter **[OpenRouter.ai](https://openrouter.ai)**
+2. Visit Groq **[console.Groq.com](https://console.groq.com/)**
+3. Click **Sign Up** (free account)
+4. Navigate to OpenRouter API **[API Keys](https://openrouter.ai/keys)**
+5. Navigate to Groq API **[API Keys](https://console.groq.com/keys)**
+6. Click **Create Key**
+7. Copy your key (starts with `sk-or-v1-` for OpenRouter and `gsk-your-key`for Groq )
 
-### Step 2: Set Your API Key
+### Step 2: Set Your API Keys
 
 #### Windows (PowerShell)
 
@@ -188,13 +190,50 @@ Enjoy a modern full-screen terminal experience.
 
 ## 🧠 AI Models
 
-Supports dozens of free OpenRouter models including:
+OpenAether supports models from both OpenRouter and Groq. You can switch models
+from the interactive selector with `/models`, or use `/model <model-id>`.
+
+OpenRouter models include:
 
 - Qwen
 - DeepSeek
 - Gemini
 - Llama
 - Mistral
+
+Groq models are also supported through the native Groq API. Add a Groq API key
+and select a Groq model from the model selector:
+
+```env
+PROVIDER=groq
+GROQ_API_KEY=gsk_your-key-here
+GROQ_MODEL=openai/gpt-oss-120b
+```
+
+Available Groq model IDs:
+
+| Model ID                              | Best For                                            | Tool Calling        |
+| ------------------------------------- | --------------------------------------------------- | ------------------- |
+| `openai/gpt-oss-120b`                 | Complex coding, debugging, and reasoning            | Yes                 |
+| `openai/gpt-oss-20b`                  | Fast coding and everyday development tasks          | Yes                 |
+| `openai/gpt-oss-safeguard-20b`        | Safety-focused classification and guarded responses | Check model support |
+| `qwen/qwen3.6-27b`                    | Coding and technical questions                      | Yes                 |
+| `qwen/qwen3.8-27b`                    | Coding and general technical work                   | Yes                 |
+| `groq/compound`                       | Fast general chat and answers                       | No                  |
+| `groq/compound-mini`                  | Fast, lightweight chat                              | No                  |
+| `allam-2-7b`                          | Arabic and multilingual prompts                     | Check model support |
+| `canopylabs/orpheus-arabic-saudi`     | Arabic voice and speech workloads                   | Not a chat model    |
+| `canopylabs/orpheus-v1-english`       | English voice and speech workloads                  | Not a chat model    |
+| `meta-llama/llama-prompt-guard-2-22m` | Prompt-injection detection                          | Not a chat model    |
+| `meta-llama/llama-prompt-guard-2-86m` | Prompt-injection detection                          | Not a chat model    |
+| `whisper-large-v3`                    | Speech-to-text transcription                        | Not a chat model    |
+| `whisper-large-v3-turbo`              | Faster speech-to-text transcription                 | Not a chat model    |
+
+The CLI's file, search, and shell tools require a model that supports tool
+calling. Use `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, or a compatible Qwen
+model for tool-based coding tasks. `groq/compound` and
+`groq/compound-mini` are available for chat, but Groq rejects tool definitions
+for those models.
 
 Switch models anytime using:
 
@@ -297,14 +336,19 @@ Keep conversations organized.
 
 OpenAether uses environment variables.
 
-| Variable                 | Required | Default                  |
-| ------------------------ | -------- | ------------------------ |
-| `OPENROUTER_API_KEY`     | Yes      | —                        |
-| `OPENROUTER_MODEL`       | No       | `qwen/qwen-3-coder:free` |
-| `OPENROUTER_MAX_TOKENS`  | No       | `2048`                   |
-| `OPENROUTER_TEMPERATURE` | No       | `0.7`                    |
-| `OPENROUTER_SITE_URL`    | No       | —                        |
-| `OPENROUTER_APP_NAME`    | No       | `OpenAether CLI`         |
+| Variable                 | Required       | Default                          |
+| ------------------------ | -------------- | -------------------------------- |
+| `OPENROUTER_API_KEY`     | For OpenRouter | —                                |
+| `GROQ_API_KEY`           | For Groq       | —                                |
+| `PROVIDER`               | No             | Auto-detected                    |
+| `OPENROUTER_MODEL`       | No             | `qwen/qwen-2.5-7b-instruct:free` |
+| `GROQ_MODEL`             | No             | `groq/compound-mini`             |
+| `OPENROUTER_MAX_TOKENS`  | No             | `4000`                           |
+| `GROQ_MAX_TOKENS`        | No             | `4000`                           |
+| `OPENROUTER_TEMPERATURE` | No             | `0.5`                            |
+| `GROQ_TEMPERATURE`       | No             | `0.5`                            |
+| `OPENROUTER_SITE_URL`    | No             | —                                |
+| `OPENROUTER_APP_NAME`    | No             | `OpenAether CLI`                 |
 
 ---
 
@@ -318,6 +362,13 @@ OPENROUTER_API_KEY=sk-or-v1-your-key
 OPENROUTER_MODEL=qwen/qwen-3-coder:free
 OPENROUTER_MAX_TOKENS=2048
 OPENROUTER_TEMPERATURE=0.7
+
+# Or use Groq
+# PROVIDER=groq
+# GROQ_API_KEY=gsk_your-key-here
+# GROQ_MODEL=openai/gpt-oss-120b
+# GROQ_MAX_TOKENS=1000
+# GROQ_TEMPERATURE=0.5
 
 # Optional Attribution
 OPENROUTER_SITE_URL=http://localhost:3000

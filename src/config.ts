@@ -1,31 +1,43 @@
-import "dotenv/config";
-
-export type Config = {
+export interface Config {
   apiKey: string;
+  groqApiKey?: string;
+  provider?: "openrouter" | "groq";
+  siteUrl: string;
+  appName: string;
   model: string;
   maxTokens: number;
   temperature: number;
-  siteUrl: string;
-  appName: string;
-};
-
-function numberEnv(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 export function loadConfig(): Config {
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (!apiKey)
-    throw new Error(
-      "OPENROUTER_API_KEY is required. Copy .env.example to .env and set it.",
-    );
+  const provider =
+    (process.env.PROVIDER as "openrouter" | "groq" | undefined) ||
+    (process.env.GROQ_MODEL ||
+    (process.env.GROQ_API_KEY && !process.env.OPENROUTER_API_KEY)
+      ? "groq"
+      : "openrouter");
+
   return {
-    apiKey,
-    model: process.env.OPENROUTER_MODEL || "openai/gpt-4-turbo",
-    maxTokens: numberEnv("OPENROUTER_MAX_TOKENS", 4096),
-    temperature: numberEnv("OPENROUTER_TEMPERATURE", 0.2),
+    apiKey: process.env.OPENROUTER_API_KEY || "",
+    groqApiKey: process.env.GROQ_API_KEY || "",
+    provider,
     siteUrl: process.env.OPENROUTER_SITE_URL || "http://localhost:3000",
     appName: process.env.OPENROUTER_APP_NAME || "OpenAether CLI",
+    model:
+      process.env.OPENROUTER_MODEL ||
+      process.env.GROQ_MODEL ||
+      (provider === "groq"
+        ? "groq/compound-mini"
+        : "qwen/qwen-2.5-7b-instruct:free"),
+    maxTokens: parseInt(
+      process.env.OPENROUTER_MAX_TOKENS ||
+        process.env.GROQ_MAX_TOKENS ||
+        "4000",
+    ),
+    temperature: parseFloat(
+      process.env.OPENROUTER_TEMPERATURE ||
+        process.env.GROQ_TEMPERATURE ||
+        "0.5",
+    ),
   };
 }

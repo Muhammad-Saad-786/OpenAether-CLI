@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { render, Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
@@ -6,9 +6,23 @@ import SelectInput from "ink-select-input";
 import type { QueryEngine } from "./core/engine.js";
 import { toolRegistry } from "./tools/registry.js";
 import { cleanMarkdown } from "./utils/markdown.js";
+import { GroqProvider } from "./provider/groq.js";
+import { createGroqProvider, createProvider } from "./provider/client.js";
+import { loadConfig } from "./config.js";
 
-const FREE_MODELS = [
-  // Meta Llama Models
+const GROQ_MODELS = [
+  { label: "GPT-OSS 20B", value: "openai/gpt-oss-20b" },
+  { label: "GPT-OSS 120B", value: "openai/gpt-oss-120b" },
+  { label: "Compound", value: "groq/compound" },
+  { label: "Compound Mini", value: "groq/compound-mini" },
+  { label: "Qwen 3.6 27B", value: "qwen/qwen3.6-27b" },
+  { label: "Qwen 3.8 27B", value: "qwen/qwen3.8-27b" },
+  { label: "Allam 2 7B", value: "allam-2-7b" },
+  { label: "Llama 3.3 70B", value: "llama-3.3-70b-versatile" },
+  { label: "Llama 3.1 8B", value: "llama-3.1-8b-instant" },
+];
+
+const OPENROUTER_FREE_MODELS = [
   {
     label: "Llama 3.2 3B (Free)",
     value: "meta-llama/llama-3.2-3b-instruct:free",
@@ -21,164 +35,20 @@ const FREE_MODELS = [
     label: "Llama 3.1 8B (Free)",
     value: "meta-llama/llama-3.1-8b-instruct:free",
   },
-  {
-    label: "Llama 3.1 70B (Free)",
-    value: "meta-llama/llama-3.1-70b-instruct:free",
-  },
-  {
-    label: "Llama 3.1 405B (Free)",
-    value: "meta-llama/llama-3.1-405b-instruct:free",
-  },
-  {
-    label: "Llama 3 8B (Free)",
-    value: "meta-llama/llama-3-8b-instruct:free",
-  },
-  {
-    label: "Llama 3 70B (Free)",
-    value: "meta-llama/llama-3-70b-instruct:free",
-  },
-
-  // Google Gemini Models
-  {
-    label: "Gemini Flash 1.5 (Free)",
-    value: "google/gemini-flash-1.5:free",
-  },
-  {
-    label: "Gemini Flash 1.5 8B (Free)",
-    value: "google/gemini-flash-1.5-8b:free",
-  },
-  {
-    label: "Gemini Flash 2.0 (Free)",
-    value: "google/gemini-flash-2.0:free",
-  },
-  {
-    label: "Gemini Pro 2.0 (Free)",
-    value: "google/gemini-pro-2.0:free",
-  },
-
-  // Qwen Models
-  {
-    label: "Qwen 2.5 7B (Free)",
-    value: "qwen/qwen-2.5-7b-instruct:free",
-  },
-  {
-    label: "Qwen 2.5 14B (Free)",
-    value: "qwen/qwen-2.5-14b-instruct:free",
-  },
-  {
-    label: "Qwen 2.5 72B (Free)",
-    value: "qwen/qwen-2.5-72b-instruct:free",
-  },
-  {
-    label: "Qwen 2.5 Coder 32B (Free)",
-    value: "qwen/qwen-2.5-coder-32b-instruct:free",
-  },
-  {
-    label: "Qwen 3 8B (Free)",
-    value: "qwen/qwen-3-8b:free",
-  },
-  {
-    label: "Qwen 3 14B (Free)",
-    value: "qwen/qwen-3-14b:free",
-  },
-  {
-    label: "Qwen 3 30B (Free)",
-    value: "qwen/qwen-3-30b-a3b:free",
-  },
-  {
-    label: "Qwen 3 Coder (Free)",
-    value: "qwen/qwen-3-coder:free",
-  },
-
-  // Mistral Models
-  {
-    label: "Mistral 7B (Free)",
-    value: "mistralai/mistral-7b-instruct:free",
-  },
-  {
-    label: "Mistral 8B (Free)",
-    value: "mistralai/mistral-8b-instruct:free",
-  },
-  {
-    label: "Mistral Small 3 (Free)",
-    value: "mistralai/mistral-small-3-instruct:free",
-  },
-
-  // Microsoft Phi Models
+  { label: "Gemini Flash 1.5 (Free)", value: "google/gemini-flash-1.5:free" },
+  { label: "Gemini Flash 2.0 (Free)", value: "google/gemini-flash-2.0:free" },
+  { label: "Qwen 2.5 7B (Free)", value: "qwen/qwen-2.5-7b-instruct:free" },
+  { label: "Qwen 3 8B (Free)", value: "qwen/qwen-3-8b:free" },
+  { label: "Qwen 3 Coder (Free)", value: "qwen/qwen-3-coder:free" },
+  { label: "Mistral 7B (Free)", value: "mistralai/mistral-7b-instruct:free" },
   {
     label: "Phi-3 Mini (Free)",
     value: "microsoft/phi-3-mini-128k-instruct:free",
   },
-  {
-    label: "Phi-3 Medium (Free)",
-    value: "microsoft/phi-3-medium-128k-instruct:free",
-  },
-  {
-    label: "Phi-3.5 Mini (Free)",
-    value: "microsoft/phi-3.5-mini-instruct:free",
-  },
-
-  // DeepSeek Models
-  {
-    label: "DeepSeek Coder (Free)",
-    value: "deepseek/deepseek-coder:free",
-  },
-  {
-    label: "DeepSeek R1 (Free)",
-    value: "deepseek/deepseek-r1:free",
-  },
-  {
-    label: "DeepSeek V3 (Free)",
-    value: "deepseek/deepseek-v3:free",
-  },
-
-  // MiniMax Models
-  {
-    label: "MiniMax M3 (Free)",
-    value: "minimax/minimax-m3:free",
-  },
-  {
-    label: "MiniMax M2 (Free)",
-    value: "minimax/minimax-m2:free",
-  },
-  {
-    label: "MiniMax M1 (Free)",
-    value: "minimax/minimax-m1:free",
-  },
-
-  // NVIDIA Models
-  {
-    label: "NVIDIA Nemotron 70B (Free)",
-    value: "nvidia/llama-3.1-nemotron-70b-instruct:free",
-  },
-  {
-    label: "NVIDIA Nemotron 8B (Free)",
-    value: "nvidia/llama-3.1-nemotron-8b-instruct:free",
-  },
-  {
-    label: "NVIDIA Nemotron Super 120B (Free)",
-    value: "nvidia/nemotron-3-super-120b-a12b:free",
-  },
-
-  // Cohere Models
-  {
-    label: "Cohere Command R (Free)",
-    value: "cohere/command-r:free",
-  },
-  {
-    label: "Cohere Command R7B (Free)",
-    value: "cohere/command-r7b:free",
-  },
-
-  // xAI Models
-  {
-    label: "Grok 3 Mini (Free)",
-    value: "x-ai/grok-3-mini:free",
-  },
-  {
-    label: "Grok 3 Beta (Free)",
-    value: "x-ai/grok-3-beta:free",
-  },
+  { label: "DeepSeek Coder (Free)", value: "deepseek/deepseek-coder:free" },
+  { label: "DeepSeek V3 (Free)", value: "deepseek/deepseek-v3:free" },
+  { label: "MiniMax M3 (Free)", value: "minimax/minimax-m3:free" },
+  { label: "Grok 3 Mini (Free)", value: "x-ai/grok-3-mini:free" },
 ];
 
 interface Message {
@@ -191,7 +61,6 @@ const COMMANDS = [
   { name: "/help", description: "Show help" },
   { name: "/models", description: "List models" },
   { name: "/model", description: "Switch model" },
-  { name: "/free", description: "Free models" },
   { name: "/tools", description: "List tools" },
   { name: "/clear", description: "Clear chat" },
   { name: "/status", description: "Session status" },
@@ -245,11 +114,15 @@ function StatusBar({
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
   return (
-    <Box marginBottom={1}>
+    <Box marginBottom={1} flexDirection="column">
       <Text color={isUser ? "green" : "cyan"} bold>
         {isUser ? "You> " : "AI> "}
       </Text>
-      <Text>{cleanMarkdown(message.content)}</Text>
+      {isUser ? (
+        <Text>{message.content}</Text>
+      ) : (
+        <Text>{cleanMarkdown(message.content)}</Text>
+      )}
       {message.streaming && <Text color="yellow">▋</Text>}
     </Box>
   );
@@ -278,14 +151,22 @@ function CommandSuggestions({ input }: { input: string }) {
   );
 }
 
-function ModelSelector({ onSelect }: { onSelect: (model: string) => void }) {
+function ModelSelector({
+  onSelect,
+}: {
+  onSelect: (model: string, provider: string) => void;
+}) {
   const items = [
-    { label: "── Free Models ──", value: "header-free" },
-    ...FREE_MODELS,
-    { label: "── Paid Models ──", value: "header-paid" },
-    { label: "GPT-4 Turbo", value: "openai/gpt-4-turbo" },
-    { label: "GPT-4o", value: "openai/gpt-4o" },
-    { label: "Claude 3 Opus", value: "anthropic/claude-3-opus" },
+    { label: "── Groq Models ──", value: "header-groq" },
+    ...GROQ_MODELS.map((m) => ({
+      label: `${m.label} (Groq)`,
+      value: `groq:${m.value}`,
+    })),
+    { label: "── OpenRouter Free ──", value: "header-openrouter" },
+    ...OPENROUTER_FREE_MODELS.map((m) => ({
+      label: m.label,
+      value: `openrouter:${m.value}`,
+    })),
   ];
 
   return (
@@ -303,7 +184,10 @@ function ModelSelector({ onSelect }: { onSelect: (model: string) => void }) {
         items={items}
         onSelect={(item) => {
           if (!item.value.startsWith("header-")) {
-            onSelect(item.value);
+            const separatorIndex = item.value.indexOf(":");
+            const provider = item.value.slice(0, separatorIndex);
+            const modelId = item.value.slice(separatorIndex + 1);
+            onSelect(modelId, provider);
           }
         }}
       />
@@ -318,13 +202,28 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
   const [isLoading, setIsLoading] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [currentModel, setCurrentModel] = useState(engine.options.model);
+  const [currentProvider, setCurrentProvider] = useState(
+    engine.provider instanceof GroqProvider ? "groq" : "openrouter",
+  );
   const [streamingMessage, setStreamingMessage] = useState("");
   const { exit } = useApp();
+  const currentModelRef = useRef(currentModel);
+  const currentProviderRef = useRef(currentProvider);
+
+  React.useEffect(() => {
+    currentModelRef.current = currentModel;
+  }, [currentModel]);
+
+  React.useEffect(() => {
+    currentProviderRef.current = currentProvider;
+  }, [currentProvider]);
+
   useInput((input, key) => {
     if (key.escape && showModelSelector) {
       setShowModelSelector(false);
     }
   });
+
   const executeCommand = async (cmd: string): Promise<boolean> => {
     const [command, ...args] = cmd.trim().split(/\s+/);
 
@@ -345,7 +244,6 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
         return true;
 
       case "/models":
-      case "/free":
         setShowModelSelector(true);
         return true;
 
@@ -353,6 +251,7 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
         if (args.length > 0) {
           setCurrentModel(args[0]);
           engine.options.model = args[0];
+          currentModelRef.current = args[0];
           setMessages((prev) => [
             ...prev,
             { role: "assistant", content: `Model switched to: ${args[0]}` },
@@ -388,7 +287,7 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
           ...prev,
           {
             role: "assistant",
-            content: `Model: ${currentModel}\nMessages: ${messages.length}\nDir: ${process.cwd()}`,
+            content: `Model: ${currentModel}\nProvider: ${currentProvider}\nMessages: ${messages.length}\nDir: ${process.cwd()}`,
           },
         ]);
         return true;
@@ -405,7 +304,6 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
 
   const handleSubmit = async (value: string) => {
     if (!value.trim()) return;
-
     if (await executeCommand(value)) {
       setInput("");
       return;
@@ -429,7 +327,7 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
           model: currentModel,
           maxTokens: engine.options.maxTokens,
           temperature: engine.options.temperature,
-          tools: toolRegistry.toOpenAIFormat(), // Pass tools
+          tools: toolRegistry.toOpenAIFormat(),
         });
 
         let fullText = "";
@@ -437,7 +335,7 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
         const toolCallMap = new Map<number, any>();
 
         for await (const chunk of stream) {
-          const delta = chunk.choices[0]?.delta;
+          const delta = chunk.choices?.[0]?.delta;
 
           // Handle text content
           if (delta?.content) {
@@ -496,7 +394,7 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
         // Execute tools
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: `🔧 Executing tools...` },
+          { role: "assistant", content: "🔧 Executing tools..." },
         ]);
 
         for (const toolCall of toolCalls) {
@@ -520,7 +418,6 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
                 content: result.content || result.error || "Tool executed",
               });
 
-              // Show tool result to user
               setMessages((prev) => [
                 ...prev,
                 {
@@ -545,7 +442,7 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
           { role: "assistant", content: "⚠️ Max iterations reached" },
         ]);
       }
-    } catch (error) {
+    } catch (error: any) {
       setMessages((prev) => [
         ...prev,
         {
@@ -589,13 +486,39 @@ function InteractiveRepl({ engine }: { engine: QueryEngine }) {
 
       {showModelSelector && (
         <ModelSelector
-          onSelect={(model) => {
+          onSelect={(model, provider) => {
+            const config = loadConfig();
+            if (provider === "groq") {
+              if (!config.groqApiKey) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "assistant",
+                    content: "GROQ_API_KEY not set. Add it to your .env file.",
+                  },
+                ]);
+                setShowModelSelector(false);
+                return;
+              }
+              engine.provider = createGroqProvider(config.groqApiKey);
+            } else {
+              engine.provider = createProvider({
+                ...config,
+                provider: "openrouter",
+              });
+            }
             setCurrentModel(model);
+            setCurrentProvider(provider);
             engine.options.model = model;
+            currentModelRef.current = model;
+            currentProviderRef.current = provider;
             setShowModelSelector(false);
             setMessages((prev) => [
               ...prev,
-              { role: "assistant", content: `Model switched to: ${model}` },
+              {
+                role: "assistant",
+                content: `Model switched to: ${model} (${provider})`,
+              },
             ]);
           }}
         />

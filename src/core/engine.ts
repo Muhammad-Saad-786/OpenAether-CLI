@@ -12,11 +12,11 @@ export interface QueryEngineOptions {
 export class QueryEngine {
   public messages: Message[];
   public options: QueryEngineOptions;
-  public provider: OpenRouterProvider;
+  public provider: any; // OpenRouterProvider | GroqProvider;
   private tools: ToolRegistry;
 
   constructor(
-    provider: OpenRouterProvider,
+    provider: any, // OpenRouterProvider | GroqProvider,
     tools: ToolRegistry,
     options: QueryEngineOptions,
     initialMessages: Message[] = [],
