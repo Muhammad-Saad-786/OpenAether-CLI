@@ -33,6 +33,7 @@ export class OpenRouterProvider {
       max_tokens: options.maxTokens,
       temperature: options.temperature,
       tools: options.tools as never,
+      ...(options.tools?.length ? { tool_choice: "auto" as const } : {}),
       stream: false,
     });
     const choice = response.choices[0];
@@ -63,6 +64,7 @@ export class OpenRouterProvider {
       max_tokens: options.maxTokens,
       temperature: options.temperature,
       tools: options.tools as never,
+      ...(options.tools?.length ? { tool_choice: "auto" as const } : {}),
       stream: true,
     });
     for await (const chunk of stream) yield chunk;

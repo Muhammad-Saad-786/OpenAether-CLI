@@ -143,7 +143,7 @@ source ~/.bashrc
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
-OPENROUTER_MODEL=qwen/qwen-3-coder:free
+OPENROUTER_MODEL=nex-agi/nex-n2.5-mini:free
 ```
 
 ### Step 3: Start Using OpenAether
@@ -200,13 +200,20 @@ Enjoy a modern full-screen terminal experience.
 OpenAether supports models from both OpenRouter and Groq. You can switch models
 from the interactive selector with `/models`, or use `/model <model-id>`.
 
-OpenRouter models include:
+The OpenRouter free-model selector includes:
 
-- Qwen
-- DeepSeek
-- Gemini
-- Llama
-- Mistral
+- `nex-agi/nex-n2.5-mini:free`
+- `inclusionai/ling-3.0-flash-fin:free`
+- `liquid/lfm-2.5-embedding-350m:free`
+- `dots-studio/dots-3-note-preview:free`
+- `nvidia/nemotron-3.5-lightning:free`
+- `poolside/laguna-s-2.1:free`
+- `thinkingmachines/inkling:free`
+- `nvidia/nemotron-3-embed-1b:free`
+- `cohere/north-mini-code:free`
+- `nvidia/nemotron-3-ultra-550b-a55b:free`
+- `google/gemma-4-31b-it:free`
+- `nvidia/nemotron-3-super-120b-a12b:free`
 
 Groq models are also supported through the native Groq API. Add a Groq API key
 and select a Groq model from the model selector:
@@ -243,7 +250,7 @@ Switch models anytime using:
 Example:
 
 ```bash
-/model qwen/qwen-3-coder:free
+/model nex-agi/nex-n2.5-mini:free
 ```
 
 ---
@@ -335,19 +342,19 @@ Keep conversations organized.
 
 OpenAether uses environment variables.
 
-| Variable                 | Required       | Default                          |
-| ------------------------ | -------------- | -------------------------------- |
-| `OPENROUTER_API_KEY`     | For OpenRouter | —                                |
-| `GROQ_API_KEY`           | For Groq       | —                                |
-| `PROVIDER`               | No             | Auto-detected                    |
-| `OPENROUTER_MODEL`       | No             | `qwen/qwen-2.5-7b-instruct:free` |
-| `GROQ_MODEL`             | No             | `openai/gpt-oss-120b`            |
-| `OPENROUTER_MAX_TOKENS`  | No             | `4000`                           |
-| `GROQ_MAX_TOKENS`        | No             | `5000`                           |
-| `OPENROUTER_TEMPERATURE` | No             | `0.5`                            |
-| `GROQ_TEMPERATURE`       | No             | `0.5`                            |
-| `OPENROUTER_SITE_URL`    | No             | —                                |
-| `OPENROUTER_APP_NAME`    | No             | `OpenAether CLI`                 |
+| Variable                 | Required       | Default                      |
+| ------------------------ | -------------- | ---------------------------- |
+| `OPENROUTER_API_KEY`     | For OpenRouter | —                            |
+| `GROQ_API_KEY`           | For Groq       | —                            |
+| `PROVIDER`               | No             | Auto-detected                |
+| `OPENROUTER_MODEL`       | No             | `nex-agi/nex-n2.5-mini:free` |
+| `GROQ_MODEL`             | No             | `openai/gpt-oss-120b`        |
+| `OPENROUTER_MAX_TOKENS`  | No             | `4000`                       |
+| `GROQ_MAX_TOKENS`        | No             | `5000`                       |
+| `OPENROUTER_TEMPERATURE` | No             | `0.5`                        |
+| `GROQ_TEMPERATURE`       | No             | `0.5`                        |
+| `OPENROUTER_SITE_URL`    | No             | —                            |
+| `OPENROUTER_APP_NAME`    | No             | `OpenAether CLI`             |
 
 ---
 
@@ -358,7 +365,7 @@ OpenAether uses environment variables.
 OPENROUTER_API_KEY=sk-or-v1-your-key
 
 # Model
-OPENROUTER_MODEL=qwen/qwen-3-coder:free
+OPENROUTER_MODEL=nex-agi/nex-n2.5-mini:free
 OPENROUTER_MAX_TOKENS=2048
 OPENROUTER_TEMPERATURE=0.7
 
@@ -376,30 +383,29 @@ OPENROUTER_APP_NAME=OpenAether CLI
 
 ---
 
-# 🤖 Free Models
+# 🤖 Free OpenRouter Models
 
-| Model                     | Provider | Context | Speed          | Best For          |
-| ------------------------- | -------- | ------- | -------------- | ----------------- |
-| qwen/qwen-3-coder:free    | Alibaba  | 32K     | ⚡ Fast        | Coding            |
-| deepseek/deepseek-v3:free | DeepSeek | 64K     | 🚀 Medium      | General Tasks     |
-| deepseek/deepseek-r1:free | DeepSeek | 64K     | 🐢 Slow        | Reasoning         |
-| llama-3.1-405b            | Meta     | 128K    | 🐢 Slow        | Large Projects    |
-| gemini-flash-2.0          | Google   | 1M      | ⚡⚡ Very Fast | Quick Answers     |
-| qwen-2.5-coder            | Alibaba  | 32K     | ⚡ Fast        | Programming       |
-| llama-3.1-70b             | Meta     | 128K    | 🚀 Medium      | Balanced          |
-| mistral-small-3           | Mistral  | 32K     | ⚡ Fast        | Lightweight Tasks |
+| Model                                    | Provider          |
+| ---------------------------------------- | ----------------- |
+| `nex-agi/nex-n2.5-mini:free`             | Nex AGI           |
+| `inclusionai/ling-3.0-flash-fin:free`    | inclusionAI       |
+| `liquid/lfm-2.5-embedding-350m:free`     | LiquidAI          |
+| `dots-studio/dots-3-note-preview:free`   | Dots Studio       |
+| `nvidia/nemotron-3.5-lightning:free`     | NVIDIA            |
+| `poolside/laguna-s-2.1:free`             | Poolside          |
+| `thinkingmachines/inkling:free`          | Thinking Machines |
+| `nvidia/nemotron-3-embed-1b:free`        | NVIDIA            |
+| `cohere/north-mini-code:free`            | Cohere            |
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | NVIDIA            |
+| `google/gemma-4-31b-it:free`             | Google            |
+| `nvidia/nemotron-3-super-120b-a12b:free` | NVIDIA            |
 
 ---
 
-# 🎯 Recommended Models
+# 🎯 Recommended OpenRouter Model
 
-| Task               | Recommended Model |
-| ------------------ | ----------------- |
-| 👨‍💻 Code Generation | Qwen 3 Coder      |
-| 🧹 Code Review     | DeepSeek V3       |
-| 🐞 Debugging       | DeepSeek R1       |
-| ⚡ Quick Answers   | Gemini Flash      |
-| 📚 Large Projects  | Llama 405B        |
+Use `/models` to choose from the active free OpenRouter models, or set
+`OPENROUTER_MODEL` directly in `.env`.
 
 ---
 

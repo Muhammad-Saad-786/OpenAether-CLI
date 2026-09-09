@@ -3,6 +3,8 @@ import path from "node:path";
 import os from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { formatProjectMap, inspectProject } from "../core/project.js";
+import { trimToTokenBudget } from "../core/budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,12 +22,15 @@ async function gitContext(cwd: string): Promise<string> {
 }
 
 export async function buildContext(cwd = process.cwd()): Promise<string> {
+  const maxDocumentCharacters = 1800;
+  const project = await inspectProject(cwd);
   const parts = [
     `Working directory: ${cwd}`,
     `Platform: ${process.platform} (${os.arch()})`,
     `Shell: ${process.env.SHELL ?? process.env.ComSpec ?? "unknown"}`,
     `Git: ${await gitContext(cwd)}`,
     "You are a practical coding assistant. Use tools when they help.",
+    formatProjectMap(project),
   ];
   try {
     const entries = await fs.readdir(cwd, { withFileTypes: true });
@@ -40,12 +45,15 @@ export async function buildContext(cwd = process.cwd()): Promise<string> {
   }
   for (const name of ["AGENTS.md", "OPENAETHER.md", "README.md"]) {
     try {
+      const content = await fs.readFile(path.join(cwd, name), "utf8");
       parts.push(
-        `\n--- ${name} ---\n${await fs.readFile(path.join(cwd, name), "utf8")}`,
+        `\n--- ${name} ---\n${content.slice(0, maxDocumentCharacters)}${
+          content.length > maxDocumentCharacters ? "\n[truncated]" : ""
+        }`,
       );
     } catch {
       /* optional context */
     }
   }
-  return parts.join("\n");
+  return trimToTokenBudget(parts.join("\n"), 900);
 }

@@ -39,12 +39,15 @@ export class ToolRegistry {
     return [...this.tools.values()];
   }
 
-  toOpenAIFormat(): any[] {
-    return this.getAll().map((tool) => ({
+  toOpenAIFormat(names?: string[]): any[] {
+    const selected = names
+      ? this.getAll().filter((tool) => names.includes(tool.name))
+      : this.getAll();
+    return selected.map((tool) => ({
       type: "function",
       function: {
         name: tool.name,
-        description: tool.description,
+        description: tool.description.substring(0, 100),
         parameters: tool.parameters,
       },
     }));

@@ -16,6 +16,7 @@ export function loadConfig(): Config {
     (process.env.GROQ_API_KEY && !process.env.OPENROUTER_API_KEY)
       ? "groq"
       : "openrouter");
+  const isGroq = provider === "groq";
 
   return {
     apiKey: process.env.OPENROUTER_API_KEY || "",
@@ -23,21 +24,16 @@ export function loadConfig(): Config {
     provider,
     siteUrl: process.env.OPENROUTER_SITE_URL || "http://localhost:3000",
     appName: process.env.OPENROUTER_APP_NAME || "OpenAether CLI",
-    model:
-      process.env.OPENROUTER_MODEL ||
-      process.env.GROQ_MODEL ||
-      (provider === "groq"
-        ? "openai/gpt-oss-120b"
-        : "qwen/qwen-2.5-7b-instruct:free"),
-    maxTokens: parseInt(
-      process.env.OPENROUTER_MAX_TOKENS ||
-        process.env.GROQ_MAX_TOKENS ||
-        (provider === "groq" ? "5000" : "4000"),
-    ),
+    model: isGroq
+      ? process.env.GROQ_MODEL || "openai/gpt-oss-20b"
+      : process.env.OPENROUTER_MODEL || "nex-agi/nex-n2.5-mini:free",
+    maxTokens: isGroq
+      ? parseInt(process.env.GROQ_MAX_TOKENS || "500")
+      : parseInt(process.env.OPENROUTER_MAX_TOKENS || "4000"),
     temperature: parseFloat(
-      process.env.OPENROUTER_TEMPERATURE ||
-        process.env.GROQ_TEMPERATURE ||
-        "0.5",
+      isGroq
+        ? process.env.GROQ_TEMPERATURE || "0.5"
+        : process.env.OPENROUTER_TEMPERATURE || "0.5",
     ),
   };
 }
