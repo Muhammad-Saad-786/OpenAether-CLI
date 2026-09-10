@@ -7,7 +7,7 @@ interface Input {
 export class DoneTool implements Tool<Input> {
   name = "done";
   description =
-    "Call this when the user's request has been fully completed. Provide a short summary of what was done. This is the ONLY way to signal completion.";
+    "Signal that the task is complete. The summary must be a short, natural-language sentence describing what was accomplished (e.g. 'Created greet.ts' or 'Listed src — 12 entries'). Never put JSON in the summary.";
   sideEffect = "meta" as const;
   parameters = {
     type: "object",

@@ -103,12 +103,20 @@ function formatGroqError(error: unknown): Error {
     /ratelimit|rate limit|tokens per minute/i.test(message)
   ) {
     return new Error(
-      "Groq rate limit reached (8K tokens/minute for this model). Wait 60 seconds or reduce request size.",
+      "Groq rate limit reached (8K tokens/minute for this model). Wait 60 seconds or switch to openrouter.",
     );
   }
   if (/organization level|blocked at the organization/i.test(message)) {
     return new Error(
       "Groq rejected this model because its underlying model is blocked for your organization.",
+    );
+  }
+  // NEW: tool validation failures
+  if (
+    /tool_use_failed|not in request.tools|tool call validation/i.test(message)
+  ) {
+    return new Error(
+      "Model attempted to call an unknown tool. Retrying with corrected tool names...",
     );
   }
   return error instanceof Error ? error : new Error(message);

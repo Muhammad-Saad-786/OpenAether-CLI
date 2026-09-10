@@ -33,6 +33,10 @@ export class AgentLoop {
     this.session.addUser(prompt);
 
     let stalledRounds = 0;
+    const userAskedForChange =
+      /\b(create|add|write|edit|update|modify|fix|rename|move|delete|remove|refactor|implement)\b/i.test(
+        prompt,
+      );
 
     for (
       let iteration = 1;
@@ -91,15 +95,73 @@ export class AgentLoop {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+
+        // Retry once on Groq tool-validation failures.
+        if (
+          /tool_use_failed|not in request.tools|tool call validation|Unknown tool/i.test(
+            message,
+          )
+        ) {
+          this.session.addToolResult({
+            role: "user",
+            content:
+              `Your previous response attempted to call a tool that does not exist. ` +
+              `Valid tools are: list_dir, read_file, write_file, edit_file, move_file, ` +
+              `delete_file, glob, grep, bash, merge_files, write_plan, done. ` +
+              `Do not use prefixes like "repo_browser.". Try again with a correct tool name.`,
+          });
+          yield {
+            type: "error",
+            message: "Retrying with corrected tool names...",
+          };
+          continue;
+        }
+
         yield { type: "error", message };
         return;
       }
 
       for (const call of toolCallMap.values()) toolCalls.push(call);
 
+      // ─── Detect leaked JSON in assistant text ────────────────
+      // Small models sometimes print the args of `done` as text instead of
+      // actually calling the tool. Convert that to a real tool call.
+      if (toolCalls.length === 0 && assistantText.trim()) {
+        const leaked = detectLeakedDone(assistantText);
+        if (leaked) {
+          toolCalls.push({
+            id: `call_leaked_${Date.now()}`,
+            type: "function",
+            function: {
+              name: "done",
+              arguments: JSON.stringify({ summary: leaked.summary }),
+            },
+          });
+          assistantText = leaked.summary;
+        }
+      }
+
       // ─── No tool calls → natural-language answer ─────────────
       if (toolCalls.length === 0) {
-        const content = assistantText.trim();
+        let content = assistantText.trim();
+
+        // If JSON leaked, show only the summary.
+        const leaked = detectLeakedDone(content);
+        if (leaked) content = leaked.summary;
+
+        // Nudge: user asked for a change but the model only talked.
+        if (iteration === 1 && userAskedForChange) {
+          this.session.addAssistant({ role: "assistant", content });
+          this.session.addToolResult({
+            role: "user",
+            content:
+              `You replied with text, but the user asked for a change. ` +
+              `Use a tool now. For example: write_file with path="src/greet.ts" ` +
+              `and content='export function greet() { return "hello"; }'.`,
+          });
+          continue;
+        }
+
         this.session.addAssistant({ role: "assistant", content });
         yield { type: "assistant_message", content };
         yield {
@@ -165,6 +227,23 @@ export class AgentLoop {
         return;
       }
 
+      // ─── Nudge: model only explored, didn't act ──────────────
+      const readOnlyTools = new Set(["list_dir", "read_file", "glob", "grep"]);
+      const didOnlyRead =
+        results.length > 0 &&
+        results.every((r) => readOnlyTools.has(r.toolName));
+      if (didOnlyRead && userAskedForChange && iteration < 3) {
+        this.session.addToolResult({
+          role: "user",
+          content:
+            `You explored the workspace but have not made any changes yet. ` +
+            `The user asked you to: "${prompt}". ` +
+            `Now use write_file, edit_file, move_file, or delete_file to actually ` +
+            `complete the request. Do not call list_dir or read_file again unless absolutely necessary.`,
+        });
+        continue;
+      }
+
       // ─── No-progress detection ───────────────────────────────
       const anySuccess = results.some((r) => r.ok);
       if (!anySuccess) {
@@ -215,4 +294,22 @@ function formatToolResultForModel(result: ToolResult): string {
   return typeof payload === "string"
     ? payload
     : JSON.stringify(payload, null, 2);
+}
+/**
+ * Small models sometimes print the arguments of the `done` tool as text,
+ * e.g. `{"summary": "Listed contents of src"}`. We detect this and treat
+ * it as a real call to `done`.
+ */
+function detectLeakedDone(text: string): { summary: string } | null {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null;
+  try {
+    const obj = JSON.parse(trimmed);
+    if (obj && typeof obj.summary === "string") {
+      return { summary: obj.summary };
+    }
+  } catch {
+    // not JSON
+  }
+  return null;
 }

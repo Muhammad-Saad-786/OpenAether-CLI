@@ -9,6 +9,8 @@ import { FileDeleteTool } from "./file-delete.js";
 import { DoneTool } from "./done.js";
 import { WritePlanTool } from "./write-plan.js";
 import type { AnyTool, Tool } from "./types.js";
+import { FileMoveTool } from "./file-move.js";
+import { ListDirTool } from "./list-dir.js";
 
 export class ToolRegistry {
   private readonly tools = new Map<string, AnyTool>();
@@ -19,6 +21,8 @@ export class ToolRegistry {
       new FileWriteTool(),
       new FileDeleteTool(),
       new FileEditTool(),
+      new FileMoveTool(),
+      new ListDirTool(),
       new GrepTool(),
       new GlobTool(),
       new BashTool(),

@@ -1,9 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { fail, ok, type Tool, type ToolResult } from "./types.js";
+import { fail, type Tool, type ToolResult } from "./types.js";
+import { workspacePath } from "./workspace.js";
 
 type Input = { pattern: string; path?: string; maxResults?: number };
-const ignored = new Set([".git", "node_modules", "dist"]);
+
+const ignored = new Set([".git", "node_modules", "dist", ".next", "build"]);
 
 async function walk(
   directory: string,
@@ -30,29 +32,38 @@ function globRegex(pattern: string): RegExp {
 
 export class GlobTool implements Tool<Input> {
   name = "glob";
-  description = "Find files by a glob pattern.";
-
+  description =
+    "Find files by a glob pattern such as 'src/**/*.ts'. Returns paths relative to the workspace root.";
   sideEffect = "read" as const;
-
   parameters = {
     type: "object",
     properties: {
       pattern: { type: "string", description: "Glob such as src/**/*.ts" },
-      path: { type: "string", description: "Directory to search" },
-      maxResults: { type: "number" },
+      path: { type: "string", description: "Directory to search (default: .)" },
+      maxResults: {
+        type: "number",
+        description: "Maximum results (default 100)",
+      },
     },
     required: ["pattern"],
   };
 
   async execute(input: Input): Promise<ToolResult> {
     try {
-      const root = path.resolve(input.path ?? ".");
+      const root = workspacePath(input.path ?? ".");
       const regex = globRegex(input.pattern.replaceAll("\\", "/"));
       const files = (await walk(root))
-        .map((file) => path.relative(root, file).replaceAll("\\", "/"))
+        .map((file) => path.relative(process.cwd(), file).replaceAll("\\", "/"))
         .filter((file) => regex.test(file))
         .slice(0, input.maxResults ?? 100);
-      return ok(files.join("\n") || "No files found.");
+
+      return {
+        ok: true,
+        toolName: "glob",
+        toolCallId: "",
+        summary: `Found ${files.length} file${files.length === 1 ? "" : "s"}`,
+        data: { pattern: input.pattern, files },
+      };
     } catch (error) {
       return fail(error);
     }
