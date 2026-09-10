@@ -1,5 +1,24 @@
 import type { ChatCompletionChunk } from "openai/resources/chat/completions";
 import type { Message, ToolUse } from "../provider/types.js";
+import { parseToolArguments } from "./tool-args.js";
+
+export function sanitizeToolCalls(calls: ToolUse[]): ToolUse[] {
+  return calls
+    .filter((call) => call.function.name.trim().length > 0)
+    .map((call, index) => {
+      let args = "{}";
+      try {
+        args = JSON.stringify(parseToolArguments(call.function.arguments));
+      } catch {
+        // Keep the assistant message valid so the model can repair the call.
+      }
+      return {
+        ...call,
+        id: call.id || `call_${index}`,
+        function: { ...call.function, arguments: args },
+      };
+    });
+}
 
 export function collectStream(
   stream: AsyncIterable<ChatCompletionChunk>,
@@ -30,7 +49,7 @@ export function collectStream(
     return {
       role: "assistant",
       content: content || null,
-      tool_calls: [...tools.values()],
+      tool_calls: sanitizeToolCalls([...tools.values()]),
     };
   })();
 }

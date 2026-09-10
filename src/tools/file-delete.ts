@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fail, ok, type Tool, type ToolResult } from "./types.js";
+import { workspacePath } from "./workspace.js";
 
 type Input = { path: string; confirm?: boolean };
 
@@ -8,6 +9,8 @@ export class FileDeleteTool implements Tool<Input> {
   name = "delete_file";
   description =
     "Delete one file inside the current workspace. Requires confirm=true.";
+  sideEffect = "write" as const;
+
   parameters = {
     type: "object",
     properties: {
@@ -20,14 +23,10 @@ export class FileDeleteTool implements Tool<Input> {
   async execute(input: Input): Promise<ToolResult> {
     try {
       if (input.confirm !== true) return fail("Deletion requires confirm=true");
+      const filePath = workspacePath(input.path);
       const workspaceRoot = path.resolve(process.cwd());
-      const filePath = path.resolve(input.path);
-      if (
-        filePath === workspaceRoot ||
-        !filePath.startsWith(`${workspaceRoot}${path.sep}`)
-      ) {
-        return fail("Refusing to delete outside the current workspace");
-      }
+      if (filePath === workspaceRoot)
+        return fail("Refusing to delete the workspace");
       const stats = await fs.stat(filePath);
       if (!stats.isFile()) return fail("Refusing to delete a directory");
       await fs.unlink(filePath);

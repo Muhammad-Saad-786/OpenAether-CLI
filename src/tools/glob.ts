@@ -31,6 +31,9 @@ function globRegex(pattern: string): RegExp {
 export class GlobTool implements Tool<Input> {
   name = "glob";
   description = "Find files by a glob pattern.";
+
+  sideEffect = "read" as const;
+
   parameters = {
     type: "object",
     properties: {

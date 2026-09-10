@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fail, ok, type Tool, type ToolResult } from "./types.js";
+import { workspacePath } from "./workspace.js";
 
 type Input = {
   sources: string[];
@@ -12,6 +13,8 @@ type Input = {
 export class MergeTool implements Tool<Input> {
   name = "merge_files";
   description = "Combine text files in order into a target file.";
+  sideEffect = "write" as const;
+
   parameters = {
     type: "object",
     properties: {
@@ -37,7 +40,7 @@ export class MergeTool implements Tool<Input> {
     try {
       if (input.sources.length === 0)
         return fail("At least one source file is required");
-      const target = path.resolve(input.target);
+      const target = workspacePath(input.target);
       const targetExists = await fs
         .stat(target)
         .then(() => true)
@@ -47,7 +50,7 @@ export class MergeTool implements Tool<Input> {
       }
       const contents = await Promise.all(
         input.sources.map(async (source) => {
-          const sourcePath = path.resolve(source);
+          const sourcePath = workspacePath(source);
           if (sourcePath === target)
             throw new Error("Target cannot also be a source file");
           return fs.readFile(sourcePath, "utf8");

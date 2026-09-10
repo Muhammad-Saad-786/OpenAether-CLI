@@ -1,4 +1,10 @@
 import Groq from "groq-sdk";
+import type {
+  CompletionOptions,
+  CompletionResult,
+  Message,
+  ToolUse,
+} from "./types.js";
 
 export function normalizeGroqModel(model: string): string {
   return model;
@@ -171,7 +177,10 @@ export class GroqProvider {
     }
   }
 
-  async complete(messages: any[], options: any): Promise<any> {
+  async complete(
+    messages: Message[],
+    options: CompletionOptions,
+  ): Promise<CompletionResult> {
     try {
       const capabilities = getGroqModelCapabilities(options.model);
       if (!capabilities.chatCompletions) {
@@ -206,6 +215,14 @@ export class GroqProvider {
         message: {
           role: "assistant",
           content: response.choices[0]?.message?.content || "",
+          tool_calls: response.choices[0]?.message?.tool_calls?.map((call) => ({
+            id: call.id,
+            type: "function",
+            function: {
+              name: call.function.name,
+              arguments: call.function.arguments,
+            },
+          })) as ToolUse[] | undefined,
         },
         usage: response.usage,
       };

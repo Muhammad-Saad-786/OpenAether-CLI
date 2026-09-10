@@ -1,4 +1,3 @@
-import type { ToolDefinition } from "../provider/types.js";
 import { BashTool } from "./bash.js";
 import { FileEditTool } from "./file-edit.js";
 import { FileReadTool } from "./file-read.js";
@@ -7,10 +6,12 @@ import { GrepTool } from "./grep.js";
 import { MergeTool } from "./merge.js";
 import { FileWriteTool } from "./file-write.js";
 import { FileDeleteTool } from "./file-delete.js";
-import type { Tool } from "./types.js";
+import { DoneTool } from "./done.js";
+import { WritePlanTool } from "./write-plan.js";
+import type { AnyTool, Tool } from "./types.js";
 
 export class ToolRegistry {
-  private readonly tools = new Map<string, Tool>();
+  private readonly tools = new Map<string, AnyTool>();
 
   constructor() {
     for (const tool of [
@@ -22,32 +23,38 @@ export class ToolRegistry {
       new GlobTool(),
       new BashTool(),
       new MergeTool(),
+      new WritePlanTool(),
+      new DoneTool(),
     ]) {
       this.register(tool);
     }
   }
 
-  register(tool: Tool): void {
+  register(tool: AnyTool): void {
     this.tools.set(tool.name, tool);
   }
 
-  get(name: string): Tool | undefined {
+  get(name: string): AnyTool | undefined {
     return this.tools.get(name);
   }
 
-  getAll(): Tool[] {
+  getAll(): AnyTool[] {
     return [...this.tools.values()];
   }
 
-  toOpenAIFormat(names?: string[]): any[] {
-    const selected = names
-      ? this.getAll().filter((tool) => names.includes(tool.name))
-      : this.getAll();
-    return selected.map((tool) => ({
-      type: "function",
+  toOpenAIFormat(): Array<{
+    type: "function";
+    function: {
+      name: string;
+      description: string;
+      parameters: Record<string, unknown>;
+    };
+  }> {
+    return this.getAll().map((tool) => ({
+      type: "function" as const,
       function: {
         name: tool.name,
-        description: tool.description.substring(0, 100),
+        description: tool.description,
         parameters: tool.parameters,
       },
     }));
@@ -57,13 +64,12 @@ export class ToolRegistry {
     const tool = this.get(name);
     if (!tool) return `Unknown tool: ${name}`;
     const result = await tool.execute(input);
-    return result.success
-      ? result.content
+    return result.ok
+      ? typeof result.data === "string"
+        ? result.data
+        : result.summary
       : `Tool error: ${result.error ?? "unknown error"}`;
   }
 }
 
 export const toolRegistry = new ToolRegistry();
-export const toolDefinitions = toolRegistry.toOpenAIFormat();
-export const executeTool = (name: string, args: Record<string, unknown>) =>
-  toolRegistry.execute(name, args);

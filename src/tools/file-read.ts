@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fail, ok, type Tool, type ToolResult } from "./types.js";
+import { workspacePath } from "./workspace.js";
 
 type Input = { path: string; offset?: number; limit?: number };
 const binaryExtensions = new Set([
@@ -28,6 +29,7 @@ export class FileReadTool implements Tool<Input> {
   name = "read_file";
   description =
     "Read a text file with line numbers. Use offset and limit for large files.";
+  sideEffect = "read" as const;
   parameters = {
     type: "object",
     properties: {
@@ -40,7 +42,7 @@ export class FileReadTool implements Tool<Input> {
 
   async execute(input: Input): Promise<ToolResult> {
     try {
-      const filePath = path.resolve(input.path);
+      const filePath = workspacePath(input.path);
       const buffer = await fs.readFile(filePath);
       if (isBinary(filePath, buffer)) return ok(`[Binary file: ${filePath}]`);
       const lines = buffer

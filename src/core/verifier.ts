@@ -19,12 +19,9 @@ export async function verifyProject(
   project: ProjectMap,
   cwd = project.cwd,
 ): Promise<VerificationResult> {
-  const scripts = project.packageScripts.length
-    ? ["install", "build", "test", "lint"].filter(
-        (script) =>
-          script === "install" || project.packageScripts.includes(script),
-      )
-    : [];
+  const scripts = ["build", "typecheck", "test", "lint"].filter((script) =>
+    project.packageScripts.includes(script),
+  );
   if (!scripts.length) {
     return {
       passed: true,
@@ -32,7 +29,7 @@ export async function verifyProject(
         {
           name: "verification",
           passed: true,
-          output: "No build, test, or lint scripts configured.",
+          output: "No build, typecheck, test, or lint scripts configured.",
         },
       ],
     };

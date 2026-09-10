@@ -183,22 +183,20 @@ openaether --print "Explain this code"
 
 ### 🖥 Beautiful Terminal Interface
 
-Enjoy a modern full-screen terminal experience.
+Use the interactive Ink terminal experience.
 
 - 🎨 Clean full-screen UI
-- 🚀 Real-time streaming responses
-- 📊 Status bar with model & session info
+- 📊 Model and provider status
 - 💬 Message history
-- ⚡ Slash command autocomplete
-- ⌨️ Keyboard navigation
-- 🤖 Built-in model selector
+- 🤖 Runtime model switching with `/model <model-id>`
 
 ---
 
 ## 🧠 AI Models
 
-OpenAether supports models from both OpenRouter and Groq. You can switch models
-from the interactive selector with `/models`, or use `/model <model-id>`.
+OpenAether supports models from both OpenRouter and Groq. Set the provider and
+default model in `.env`, or switch the active model in the REPL with
+`/model <model-id>`.
 
 The OpenRouter free-model selector includes:
 
@@ -216,7 +214,7 @@ The OpenRouter free-model selector includes:
 - `nvidia/nemotron-3-super-120b-a12b:free`
 
 Groq models are also supported through the native Groq API. Add a Groq API key
-and select a Groq model from the model selector:
+and select a Groq model with `GROQ_MODEL` or `/model <model-id>`:
 
 ```env
 PROVIDER=groq
@@ -309,17 +307,14 @@ Keep conversations organized.
 
 ## Interactive Commands
 
-| Command       | Description          |
-| ------------- | -------------------- |
-| `/help`       | Show help            |
-| `/models`     | List all models      |
-| `/free`       | Show free models     |
-| `/model <id>` | Change model         |
-| `/tools`      | List available tools |
-| `/status`     | Show session info    |
-| `/context`    | View context usage   |
-| `/clear`      | Clear chat history   |
-| `/exit`       | Exit OpenAether      |
+| Command       | Description            |
+| ------------- | ---------------------- |
+| `/help`       | Show help              |
+| `/model <id>` | Change model           |
+| `/status`     | Show session info      |
+| `/pwd`        | Show working directory |
+| `/clear`      | Clear chat history     |
+| `/exit`       | Exit OpenAether        |
 
 ---
 

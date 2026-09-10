@@ -8,6 +8,8 @@ type Input = { command: string; timeoutMs?: number };
 export class BashTool implements Tool<Input> {
   name = "bash";
   description = "Execute a shell command in the working directory.";
+  sideEffect = "exec" as const;
+
   parameters = {
     type: "object",
     properties: {

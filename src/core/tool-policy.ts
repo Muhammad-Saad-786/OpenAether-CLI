@@ -5,6 +5,21 @@ export function shouldUseTools(prompt: string): boolean {
   return TOOL_INTENT.test(prompt);
 }
 
+const ALLOWED_TOOLS = new Set([
+  "read_file",
+  "write_file",
+  "edit_file",
+  "delete_file",
+  "grep",
+  "glob",
+  "bash",
+  "merge_files",
+]);
+
+export function isAllowedTool(name: string): boolean {
+  return ALLOWED_TOOLS.has(name);
+}
+
 export function requestedFilePaths(prompt: string): string[] {
   const matches =
     prompt.match(/(?:^|[\s`"'])([\w./\\-]+\.[a-z0-9]+)(?=$|[\s`"'])/gi) ?? [];

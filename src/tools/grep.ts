@@ -26,6 +26,8 @@ async function filesIn(
 export class GrepTool implements Tool<Input> {
   name = "grep";
   description = "Search text files with a regular expression and line numbers.";
+  sideEffect = "read" as const;
+
   parameters = {
     type: "object",
     properties: {

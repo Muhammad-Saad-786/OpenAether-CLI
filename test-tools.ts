@@ -14,8 +14,11 @@ async function main() {
   if (readTool) {
     console.log("\nTesting read_file...");
     const result = await readTool.execute({ path: "./package.json" });
-    console.log("Success:", result.success);
-    console.log("Content preview:", result.content?.substring(0, 200));
+    console.log("Success:", result.ok);
+    console.log(
+      "Content preview:",
+      String(result.data ?? "").substring(0, 200),
+    );
   }
 
   // Test grep
@@ -27,8 +30,8 @@ async function main() {
       path: "./src",
       include: "*.ts",
     });
-    console.log("Success:", result.success);
-    console.log("Matches found:", result.content?.substring(0, 200));
+    console.log("Success:", result.ok);
+    console.log("Matches found:", String(result.data ?? "").substring(0, 200));
   }
 }
 

@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fail, ok, type Tool, type ToolResult } from "./types.js";
+import { workspacePath } from "./workspace.js";
 
 type Input = { path: string; content: string; overwrite?: boolean };
 
@@ -8,6 +9,8 @@ export class FileWriteTool implements Tool<Input> {
   name = "write_file";
   description =
     "Create a text file or overwrite an existing file when explicitly allowed.";
+  sideEffect = "write" as const;
+
   parameters = {
     type: "object",
     properties: {
@@ -23,7 +26,7 @@ export class FileWriteTool implements Tool<Input> {
 
   async execute(input: Input): Promise<ToolResult> {
     try {
-      const filePath = path.resolve(input.path);
+      const filePath = workspacePath(input.path);
       await fs.mkdir(path.dirname(filePath), { recursive: true });
       const existed = await fs
         .stat(filePath)

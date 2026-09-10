@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fail, ok, type Tool, type ToolResult } from "./types.js";
+import { workspacePath } from "./workspace.js";
 
 type Input = {
   path: string;
@@ -12,6 +13,8 @@ type Input = {
 export class FileEditTool implements Tool<Input> {
   name = "edit_file";
   description = "Make a targeted string replacement in a text file.";
+  sideEffect = "write" as const;
+
   parameters = {
     type: "object",
     properties: {
@@ -26,7 +29,7 @@ export class FileEditTool implements Tool<Input> {
   async execute(input: Input): Promise<ToolResult> {
     try {
       if (!input.oldText) return fail("oldText must not be empty");
-      const filePath = path.resolve(input.path);
+      const filePath = workspacePath(input.path);
       const original = await fs.readFile(filePath, "utf8");
       const occurrences = original.split(input.oldText).length - 1;
       if (occurrences === 0) return fail("oldText was not found");
