@@ -86,8 +86,9 @@ export async function runFirstRunSetup(): Promise<void> {
   let openRouterKey = "";
   output.write(
     "\nOpenAether setup\n" +
-      "Your keys are saved only in this folder's .env file. Keep this file private and never commit it.\n" +
-      "Type / at any prompt for commands.\n\n",
+      "Paste your API keys. Everything else (model, temperature, tokens) is\n" +
+      "auto-configured. You only need one key, but both work.\n" +
+      "Your keys are saved to a .env file in this folder. Never commit it.\n\n",
   );
 
   while (true) {
@@ -115,7 +116,10 @@ export async function runFirstRunSetup(): Promise<void> {
         continue;
       }
       await saveKeys(groqKey, openRouterKey);
-      output.write(`Keys saved to ${envPath}.\n`);
+      output.write(
+        `Saved to ${envPath}.\n` +
+          `OpenAether will use Groq by default if you provided both keys.\n`,
+      );
       return;
     } else if (command === "q" || command === "/skip" || command === "skip") {
       output.write("Continuing without saving keys.\n");

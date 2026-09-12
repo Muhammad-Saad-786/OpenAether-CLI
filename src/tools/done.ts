@@ -7,27 +7,31 @@ interface Input {
 export class DoneTool implements Tool<Input> {
   name = "done";
   description =
-    "Signal that the task is complete. The summary must be a short, natural-language sentence describing what was accomplished (e.g. 'Created greet.ts' or 'Listed src — 12 entries'). Never put JSON in the summary.";
+    "Signal that the task is complete. The summary must be a ONE-LINE status like 'Created greet.ts' or 'Fixed the type error'. Do NOT put the user-facing answer in the summary — write the answer as a normal assistant message before calling done.";
   sideEffect = "meta" as const;
   parameters = {
     type: "object",
     properties: {
-      summary: {
+      status: {
         type: "string",
-        description: "Short summary of what was accomplished.",
+        description:
+          "One-line completion status, e.g. 'Listed src' or 'Fixed type error in broken.ts'. Do NOT put the answer to the user's question here — put that in your assistant message before calling done.",
       },
     },
-    required: ["summary"],
+    required: ["status"],
   };
 
-  async execute(input: Input): Promise<ToolResult> {
-    const summary = (input?.summary ?? "Task completed").trim();
+  async execute(input: {
+    status?: string;
+    summary?: string;
+  }): Promise<ToolResult> {
+    const status = (input.status ?? input.summary ?? "Task completed").trim();
     return {
       ok: true,
       toolName: "done",
       toolCallId: "",
-      summary,
-      data: { summary },
+      summary: status,
+      data: { summary: status, status },
     };
   }
 }

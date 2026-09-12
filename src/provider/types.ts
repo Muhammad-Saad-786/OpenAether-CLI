@@ -39,3 +39,24 @@ export type CompletionResult = {
     total_tokens?: number;
   };
 };
+export interface ProviderCapabilities {
+  supportsTools: boolean;
+  contextWindow: number;
+  maxOutput: number;
+  rateLimits?: {
+    rpm?: number;
+    tpm?: number;
+    rpd?: number;
+  };
+}
+
+export interface ChatProvider {
+  readonly name: string;
+  stream(messages: Message[], options: CompletionOptions): AsyncGenerator<any>;
+  complete(
+    messages: Message[],
+    options: CompletionOptions,
+  ): Promise<CompletionResult>;
+  capabilities(model: string): ProviderCapabilities;
+  isRateLimitError(error: unknown): boolean;
+}

@@ -4,6 +4,7 @@ import type {
   CompletionResult,
   Message,
   ToolUse,
+  ProviderCapabilities,
 } from "./types.js";
 
 export function normalizeGroqModel(model: string): string {
@@ -51,6 +52,16 @@ const GROQ_CAPABILITIES: Record<string, GroqModelCapabilities> = {
     chatCompletions: true,
     toolCalling: false,
     category: "chat",
+  },
+  "llama-3.3-70b-versatile": {
+    chatCompletions: true,
+    toolCalling: true,
+    category: "coding",
+  },
+  "llama-3.1-8b-instant": {
+    chatCompletions: true,
+    toolCalling: true,
+    category: "coding",
   },
   "whisper-large-v3": {
     chatCompletions: false,
@@ -102,73 +113,68 @@ function formatGroqError(error: unknown): Error {
     status === 429 ||
     /ratelimit|rate limit|tokens per minute/i.test(message)
   ) {
-    return new Error(
-      "Groq rate limit reached (8K tokens/minute for this model). Wait 60 seconds or switch to openrouter.",
+    const wrapped = new Error(
+      "Groq rate limit reached (8K tokens/minute on this plan).",
     );
+    (wrapped as any).isRateLimit = true;
+    return wrapped;
   }
   if (/organization level|blocked at the organization/i.test(message)) {
     return new Error(
       "Groq rejected this model because its underlying model is blocked for your organization.",
     );
   }
-  // NEW: tool validation failures
   if (
     /tool_use_failed|not in request.tools|tool call validation/i.test(message)
   ) {
-    return new Error(
-      "Model attempted to call an unknown tool. Retrying with corrected tool names...",
-    );
+    return new Error("Model attempted to call an unknown tool.");
   }
   return error instanceof Error ? error : new Error(message);
 }
 
-export function getGroqMaxTokens(model: string, requested: number): number {
-  const publishedLimit = model.startsWith("groq/compound") ? 70000 : 8000;
-  if (model.startsWith("groq/compound")) {
-    return Math.min(requested || 500, publishedLimit);
-  }
-  const enforcedLimit = model.startsWith("qwen/") ? 1000 : 500;
-  return Math.min(requested || 500, enforcedLimit);
-}
-
 export class GroqProvider {
+  readonly name = "groq";
   private readonly client: Groq;
 
   constructor(apiKey: string) {
-    this.client = new Groq({
-      apiKey: apiKey,
-    });
+    this.client = new Groq({ apiKey });
   }
 
-  async *stream(messages: any[], options: any): AsyncGenerator<any> {
+  capabilities(model: string): ProviderCapabilities {
+    const caps = getGroqModelCapabilities(model);
+    return {
+      supportsTools: caps.toolCalling,
+      contextWindow: 128_000,
+      maxOutput: caps.category === "coding" ? 8000 : 4000,
+      rateLimits: { rpm: 30, tpm: 8000 },
+    };
+  }
+
+  isRateLimitError(error: unknown): boolean {
+    return Boolean((error as { isRateLimit?: boolean })?.isRateLimit);
+  }
+
+  async *stream(
+    messages: Message[],
+    options: CompletionOptions,
+  ): AsyncGenerator<any> {
     try {
-      const capabilities = getGroqModelCapabilities(options.model);
-      if (!capabilities.chatCompletions) {
+      const caps = getGroqModelCapabilities(options.model);
+      if (!caps.chatCompletions) {
         throw new Error(
-          `Model ${options.model} supports ${capabilities.category}, not coding chat.`,
+          `Model ${options.model} does not support chat completions.`,
         );
       }
 
-      // Limit messages to last 4 to reduce token usage
-      const limitedMessages = messages.slice(-4);
-
-      // Limit max_tokens to 500 for Groq
-      const maxTokens = Math.min(options.maxTokens || 500, 500);
-
       const request: any = {
         model: normalizeGroqModel(options.model),
-        messages: limitedMessages,
-        max_tokens: maxTokens,
-        temperature: options.temperature || 0.5,
+        messages,
+        max_tokens: options.maxTokens,
+        temperature: options.temperature,
         stream: true,
       };
 
-      // Only include tools for tool-capable models
-      if (
-        capabilities.toolCalling &&
-        options.tools &&
-        options.tools.length > 0
-      ) {
+      if (caps.toolCalling && options.tools?.length) {
         request.tools = options.tools;
         request.tool_choice = "auto";
       }
@@ -177,9 +183,7 @@ export class GroqProvider {
         request,
       )) as unknown as AsyncIterable<any>;
 
-      for await (const chunk of stream) {
-        yield chunk;
-      }
+      for await (const chunk of stream) yield chunk;
     } catch (error) {
       throw formatGroqError(error);
     }
@@ -190,29 +194,22 @@ export class GroqProvider {
     options: CompletionOptions,
   ): Promise<CompletionResult> {
     try {
-      const capabilities = getGroqModelCapabilities(options.model);
-      if (!capabilities.chatCompletions) {
+      const caps = getGroqModelCapabilities(options.model);
+      if (!caps.chatCompletions) {
         throw new Error(
-          `Model ${options.model} supports ${capabilities.category}, not coding chat.`,
+          `Model ${options.model} does not support chat completions.`,
         );
       }
 
-      const limitedMessages = messages.slice(-4);
-      const maxTokens = Math.min(options.maxTokens || 500, 500);
-
       const request: any = {
         model: normalizeGroqModel(options.model),
-        messages: limitedMessages,
-        max_tokens: maxTokens,
-        temperature: options.temperature || 0.5,
+        messages,
+        max_tokens: options.maxTokens,
+        temperature: options.temperature,
         stream: false,
       };
 
-      if (
-        capabilities.toolCalling &&
-        options.tools &&
-        options.tools.length > 0
-      ) {
+      if (caps.toolCalling && options.tools?.length) {
         request.tools = options.tools;
         request.tool_choice = "auto";
       }

@@ -3,12 +3,34 @@ import path from "node:path";
 import { fail, ok, type Tool, type ToolResult } from "./types.js";
 import { workspacePath } from "./workspace.js";
 
-type Input = { path: string; content: string; overwrite?: boolean };
+type Input = {
+  path: string;
+  content: string;
+  overwrite?: boolean;
+  force?: boolean;
+};
+
+const BANNED_DIRECTIVES = [
+  { pattern: /@ts-nocheck/, name: "@ts-nocheck" },
+  { pattern: /@ts-ignore/, name: "@ts-ignore" },
+  { pattern: /@ts-expect-error/, name: "@ts-expect-error" },
+  { pattern: /\/\*\s*eslint-disable\s*\*\//, name: "blanket eslint-disable" },
+];
+
+function findBannedDirective(content: string): string | null {
+  for (const { pattern, name } of BANNED_DIRECTIVES) {
+    if (pattern.test(content)) return name;
+  }
+  return null;
+}
 
 export class FileWriteTool implements Tool<Input> {
   name = "write_file";
   description =
-    "Create a new text file, or replace an existing one. Set overwrite=true only when the file already exists and you intend to replace it.";
+    "Create a new text file or replace an existing one. Set overwrite=true to replace an existing file. " +
+    "IMPORTANT: by default this tool rejects content containing @ts-ignore, @ts-nocheck, @ts-expect-error, or blanket eslint-disable. " +
+    "If the user EXPLICITLY asks for these directives, pass force=true to allow them. " +
+    "Never use force=true to work around your own mistakes — fix the code instead.";
   sideEffect = "write" as const;
   parameters = {
     type: "object",
@@ -20,12 +42,30 @@ export class FileWriteTool implements Tool<Input> {
         description:
           "Must be true to replace an existing file. Ignored for new files.",
       },
+      force: {
+        type: "boolean",
+        description:
+          "Set to true ONLY if the user explicitly requested a suppressed directive. Otherwise leave unset.",
+      },
     },
     required: ["path", "content"],
   };
 
   async execute(input: Input): Promise<ToolResult> {
     try {
+      // 1. Banned-directive check — BEFORE touching the filesystem.
+      if (input.force !== true) {
+        const banned = findBannedDirective(input.content);
+        if (banned) {
+          return fail(
+            `Refused to write ${input.path}: content contains banned directive "${banned}". ` +
+              `Fix the underlying problem instead of suppressing it. ` +
+              `If the user explicitly asked for this directive, set force=true.`,
+            `Banned directive: ${banned}`,
+          );
+        }
+      }
+
       const filePath = workspacePath(input.path);
       await fs.mkdir(path.dirname(filePath), { recursive: true });
 

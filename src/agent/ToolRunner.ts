@@ -12,6 +12,12 @@ import { parseToolArguments } from "../utils/tool-args.js";
  * Every tool execution is wrapped in try/catch and always returns a
  * structured ToolResult — never throws.
  */
+function previewArgs(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "(empty)";
+  return trimmed.length > 300 ? trimmed.slice(0, 297) + "..." : trimmed;
+}
+
 export class ToolRunner {
   async runAll(
     calls: AgentToolCall[],
@@ -76,8 +82,11 @@ export class ToolRunner {
         ok: false,
         toolName: call.function.name,
         toolCallId: call.id,
-        summary: `Invalid arguments for ${call.function.name}`,
-        error: err instanceof Error ? err.message : String(err),
+        summary: `Invalid JSON arguments for ${call.function.name}`,
+        error:
+          `Failed to parse tool call arguments as JSON. ` +
+          `Raw arguments were: ${previewArgs(call.function.arguments)}. ` +
+          `Details: ${err instanceof Error ? err.message : String(err)}`,
         meta: { durationMs: Date.now() - started },
       };
     }

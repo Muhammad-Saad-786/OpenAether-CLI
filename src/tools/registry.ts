@@ -11,6 +11,7 @@ import { WritePlanTool } from "./write-plan.js";
 import type { AnyTool, Tool } from "./types.js";
 import { FileMoveTool } from "./file-move.js";
 import { ListDirTool } from "./list-dir.js";
+import { VerificationTool } from "./verification.js";
 
 export class ToolRegistry {
   private readonly tools = new Map<string, AnyTool>();
@@ -28,6 +29,7 @@ export class ToolRegistry {
       new BashTool(),
       new MergeTool(),
       new WritePlanTool(),
+      new VerificationTool(),
       new DoneTool(),
     ]) {
       this.register(tool);

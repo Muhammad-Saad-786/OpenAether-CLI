@@ -9,10 +9,24 @@ type Input = {
   replaceAll?: boolean;
 };
 
+const BANNED_DIRECTIVES = [
+  { pattern: /@ts-nocheck/, name: "@ts-nocheck" },
+  { pattern: /@ts-ignore/, name: "@ts-ignore" },
+  { pattern: /@ts-expect-error/, name: "@ts-expect-error" },
+  { pattern: /\/\*\s*eslint-disable\s*\*\//, name: "blanket eslint-disable" },
+];
+
+function findBannedDirective(content: string): string | null {
+  for (const { pattern, name } of BANNED_DIRECTIVES) {
+    if (pattern.test(content)) return name;
+  }
+  return null;
+}
+
 export class FileEditTool implements Tool<Input> {
   name = "edit_file";
   description =
-    "Replace an exact block of text in a file. oldText must match the file byte-for-byte, but whitespace-only differences are tolerated.";
+    "Replace an exact block of text in a file. oldText must match the file byte-for-byte, but whitespace-only differences are tolerated. Do NOT introduce directives like @ts-ignore or @ts-nocheck — fix the underlying problem instead.";
   sideEffect = "write" as const;
   parameters = {
     type: "object",
@@ -31,6 +45,7 @@ export class FileEditTool implements Tool<Input> {
   async execute(input: Input): Promise<ToolResult> {
     try {
       if (!input.oldText) return fail("oldText must not be empty");
+
       const filePath = workspacePath(input.path);
       const original = await fs.readFile(filePath, "utf8");
 
@@ -43,9 +58,7 @@ export class FileEditTool implements Tool<Input> {
         // 2. Fallback: whitespace-normalized match.
         const norm = normalizeWhitespace(original);
         const normOld = normalizeWhitespace(input.oldText);
-        const normNew = normalizeWhitespace(input.newText);
         if (norm.includes(normOld)) {
-          // Reconstruct with original whitespace by replacing the region.
           updated = replaceNormalized(original, input.oldText, input.newText);
           strategy = "whitespace";
           matchCount = 1;
@@ -70,6 +83,16 @@ export class FileEditTool implements Tool<Input> {
         updated = input.replaceAll
           ? original.split(input.oldText).join(input.newText)
           : original.replace(input.oldText, input.newText);
+      }
+
+      // 3. Banned-directive check — BEFORE writing.
+      const banned = findBannedDirective(updated);
+      if (banned) {
+        return fail(
+          `Refused to edit ${input.path}: result would contain banned directive "${banned}". ` +
+            `Fix the underlying problem instead of suppressing it.`,
+          `Banned directive: ${banned}`,
+        );
       }
 
       await fs.writeFile(filePath, updated, "utf8");
@@ -123,7 +146,6 @@ function replaceNormalized(
     .filter(Boolean);
   if (!oldLines.length) return null;
 
-  // Find a window of lines whose trimmed content matches oldLines in order.
   for (let i = 0; i <= lines.length - oldLines.length; i++) {
     let ok = true;
     for (let j = 0; j < oldLines.length; j++) {
@@ -134,7 +156,6 @@ function replaceNormalized(
     }
     if (!ok) continue;
 
-    // Preserve the indentation of the first replaced line.
     const indent = lines[i].match(/^\s*/)?.[0] ?? "";
     const newLines = newText
       .split("\n")

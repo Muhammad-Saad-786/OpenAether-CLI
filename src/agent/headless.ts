@@ -22,8 +22,31 @@ export async function runAgentHeadless(
     prompt,
   );
 
-  const provider = getAgentProvider(config);
-  const loop = new AgentLoop(session, provider);
+  await session.initRepoMap(process.cwd());
+
+  const primary = getAgentProvider(config);
+
+  // Build a fallback provider + fallback model when the other provider
+  // has a key available. This protects against rate limits and upstream
+  // outages on free-tier models.
+  let fallbackProvider = undefined;
+  let fallbackModel = undefined;
+
+  if (config.provider === "groq" && config.apiKey) {
+    fallbackProvider = getAgentProvider({ ...config, provider: "openrouter" });
+    fallbackModel = "cohere/north-mini-code:free";
+  } else if (config.provider === "openrouter" && config.groqApiKey) {
+    fallbackProvider = getAgentProvider({ ...config, provider: "groq" });
+    fallbackModel = "openai/gpt-oss-120b";
+  }
+
+  const loop = new AgentLoop(
+    session,
+    primary,
+    undefined,
+    fallbackProvider,
+    fallbackModel,
+  );
 
   for await (const event of loop.run(prompt)) {
     renderEvent(event);
@@ -68,7 +91,11 @@ function renderEvent(event: AgentEvent): void {
       break;
 
     case "done":
-      console.log(chalk.gray(`\n── done (${event.iterations} iterations) ──`));
+      console.log(
+        chalk.gray(
+          `\n── done: ${event.summary} (${event.iterations} iterations) ──`,
+        ),
+      );
       break;
   }
 }
