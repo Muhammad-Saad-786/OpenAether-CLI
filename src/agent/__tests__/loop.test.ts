@@ -78,7 +78,7 @@ async function main() {
   // ─── Test 1: plain chat → no tools → done ─────────────────
   {
     const registry = new FakeRegistry();
-    const session = new AgentSession(registry as any, {
+    const session = new AgentSession({
       systemPrompt: "test",
       model: "test-model",
       maxTokens: 100,
@@ -116,7 +116,7 @@ async function main() {
         };
       },
     });
-    const session = new AgentSession(registry as any, {
+    const session = new AgentSession({
       systemPrompt: "test",
       model: "test-model",
       maxTokens: 100,
@@ -163,7 +163,7 @@ async function main() {
         };
       },
     });
-    const session = new AgentSession(registry as any, {
+    const session = new AgentSession({
       systemPrompt: "test",
       model: "test-model",
       maxTokens: 100,
@@ -198,7 +198,7 @@ async function main() {
         };
       },
     });
-    const session = new AgentSession(registry as any, {
+    const session = new AgentSession({
       systemPrompt: "test",
       model: "test-model",
       maxTokens: 100,

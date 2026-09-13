@@ -129,10 +129,9 @@ function InteractiveRepl({ config }: { config: Config }) {
   const abortRef = useRef(false);
   const sessionChanges = useRef<FileChange[]>([]);
 
-  // One session per REPL run, reused across prompts.
   const session = useMemo(
     () =>
-      new AgentSession(toolRegistry, {
+      new AgentSession({
         systemPrompt: SYSTEM_PROMPT,
         model: config.model,
         maxTokens: config.maxTokens,

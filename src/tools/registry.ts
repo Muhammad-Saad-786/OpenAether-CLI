@@ -11,8 +11,10 @@ import { ListDirTool } from "./list-dir.js";
 import { DoneTool } from "./done.js";
 import { WritePlanTool } from "./write-plan.js";
 import { VerificationTool } from "./verification.js";
+import { FindSymbolTool } from "./find-symbol.js";
+import { SearchSymbolsTool } from "./search-symbols.js";
 import type { AnyTool } from "./types.js";
-
+import type { SymbolIndex } from "../agent/symbolIndex.js";
 /**
  * Tools the agent loop calls internally. These are NOT exposed to the
  * model — they're filtered out of `toOpenAIFormat()`.
@@ -22,7 +24,7 @@ const LOOP_OWNED_TOOLS = new Set(["run_verification"]);
 export class ToolRegistry {
   private readonly tools = new Map<string, AnyTool>();
 
-  constructor() {
+  constructor(symbolIndex?: SymbolIndex) {
     for (const tool of [
       new FileReadTool(),
       new FileWriteTool(),
@@ -39,6 +41,11 @@ export class ToolRegistry {
       new DoneTool(),
     ]) {
       this.register(tool);
+    }
+    // Symbol tools only exist when we have an index to search.
+    if (symbolIndex) {
+      this.register(new FindSymbolTool(symbolIndex));
+      this.register(new SearchSymbolsTool(symbolIndex));
     }
   }
 

@@ -1,8 +1,9 @@
 import type { AgentMessage, AgentMemory, AgentTool } from "./types.js";
 import { createMemory } from "./types.js";
-import type { ToolRegistry } from "../tools/registry.js";
+import { ToolRegistry } from "../tools/registry.js";
 import { MemoryCompressor } from "./memory.js";
 import { scanRepo, formatRepoMap, type RepoMap } from "./repoMap.js";
+import { SymbolIndex } from "./symbolIndex.js";
 
 export interface SessionConfig {
   systemPrompt: string;
@@ -16,30 +17,30 @@ export class AgentSession {
   public readonly memory: AgentMemory;
   public readonly tools: ToolRegistry;
   public readonly config: SessionConfig;
+  public readonly symbolIndex: SymbolIndex;
   public readonly lockedFiles = new Set<string>();
 
   private readonly compressor = new MemoryCompressor(8);
   private repoMap: RepoMap | null = null;
   private repoSummary = "";
 
-  constructor(tools: ToolRegistry, config: SessionConfig, goal = "") {
-    this.tools = tools;
+  constructor(config: SessionConfig, goal = "", registry?: ToolRegistry) {
     this.config = config;
     this.memory = createMemory(goal);
+    this.symbolIndex = new SymbolIndex();
+    this.tools = registry ?? new ToolRegistry(this.symbolIndex);
     this.messages.push({
       role: "system",
       content: config.systemPrompt,
     });
   }
 
-  /**
-   * Load the repo map once. Safe to call multiple times — subsequent
-   * calls are no-ops.
-   */
   async initRepoMap(cwd = process.cwd()): Promise<void> {
     if (this.repoMap) return;
     this.repoMap = await scanRepo(cwd);
     this.repoSummary = formatRepoMap(this.repoMap);
+    // Build the symbol index once, at session start.
+    await this.symbolIndex.build();
   }
 
   setGoal(goal: string): void {
@@ -104,6 +105,18 @@ export class AgentSession {
         `Verification: ${m.verification.passed ? "passed" : "failed"} (${m.verification.lastRun})`,
       );
     if (m.plan) parts.push(`Plan:\n${m.plan}`);
+
+    // Add the top exports from the symbol index.
+    if (this.symbolIndex.isBuilt()) {
+      const top = this.symbolIndex.topExports(30);
+      if (top.length) {
+        const lines = top.map(
+          (s) => `${s.file}:${s.line} [${s.kind}] ${s.name}`,
+        );
+        parts.push(`── KEY SYMBOLS ──\n${lines.join("\n")}`);
+      }
+    }
+
     return parts.length ? `── MEMORY ──\n${parts.join("\n")}` : "";
   }
 

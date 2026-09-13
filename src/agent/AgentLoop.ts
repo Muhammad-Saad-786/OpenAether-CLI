@@ -530,6 +530,18 @@ export class AgentLoop {
       )
         m.filesWritten.add(path);
       if (result.toolName === "delete_file" && path) m.filesDeleted.add(path);
+
+      // Refresh the symbol index for the changed file.
+      if (
+        path &&
+        ["write_file", "edit_file", "delete_file", "move_file"].includes(
+          result.toolName,
+        )
+      ) {
+        // Fire-and-forget — we don't block the loop on index refresh.
+        void this.session.symbolIndex.refreshFile(path);
+      }
+
       if (result.toolName === "bash") {
         const cmd = (result.data as { command?: string } | undefined)?.command;
         if (cmd) m.commandsRun.push(cmd);
