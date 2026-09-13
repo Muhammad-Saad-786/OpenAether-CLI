@@ -6,12 +6,18 @@ import { GrepTool } from "./grep.js";
 import { MergeTool } from "./merge.js";
 import { FileWriteTool } from "./file-write.js";
 import { FileDeleteTool } from "./file-delete.js";
-import { DoneTool } from "./done.js";
-import { WritePlanTool } from "./write-plan.js";
-import type { AnyTool, Tool } from "./types.js";
 import { FileMoveTool } from "./file-move.js";
 import { ListDirTool } from "./list-dir.js";
+import { DoneTool } from "./done.js";
+import { WritePlanTool } from "./write-plan.js";
 import { VerificationTool } from "./verification.js";
+import type { AnyTool } from "./types.js";
+
+/**
+ * Tools the agent loop calls internally. These are NOT exposed to the
+ * model — they're filtered out of `toOpenAIFormat()`.
+ */
+const LOOP_OWNED_TOOLS = new Set(["run_verification"]);
 
 export class ToolRegistry {
   private readonly tools = new Map<string, AnyTool>();
@@ -56,14 +62,16 @@ export class ToolRegistry {
       parameters: Record<string, unknown>;
     };
   }> {
-    return this.getAll().map((tool) => ({
-      type: "function" as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-      },
-    }));
+    return this.getAll()
+      .filter((tool) => !LOOP_OWNED_TOOLS.has(tool.name))
+      .map((tool) => ({
+        type: "function" as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+      }));
   }
 
   async execute(name: string, input: Record<string, unknown>): Promise<string> {

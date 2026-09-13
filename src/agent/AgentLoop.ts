@@ -5,6 +5,19 @@ import { ToolRunner } from "./ToolRunner.js";
 import type { ChatProvider } from "../provider/types.js";
 import type { Message } from "../provider/types.js";
 
+/**
+ * The heart of OpenAether. A single loop:
+ *   1. Build request (with memory + repo summary)
+ *   2. Stream the model response
+ *   3. If no tool calls → treat as completion (or done)
+ *   4. Execute tool calls
+ *   5. If any file changed → run verification automatically
+ *   6. If verification failed → nudge the model to fix
+ *   7. Repeat until done
+ *
+ * Verification is owned by the loop, not the model. The model never sees
+ * the run_verification tool — it's hidden from the tool list.
+ */
 export class AgentLoop {
   private readonly toolRunner = new ToolRunner();
 
@@ -17,8 +30,7 @@ export class AgentLoop {
   ) {}
 
   async *run(prompt: string): AsyncGenerator<AgentEvent> {
-    // Reset per-prompt change tracking. Verification is scoped to the
-    // current task, not the whole session.
+    // Reset per-prompt change tracking.
     this.session.memory.filesWritten.clear();
     this.session.memory.filesDeleted.clear();
     this.session.memory.verification = null;
@@ -46,20 +58,19 @@ export class AgentLoop {
           role: "user",
           content:
             `REMINDER: Task is "${prompt}". Stay focused. ` +
-            `Do NOT create or modify files unrelated to this task. ` +
-            `If verification fails, read the exact errors and fix them.`,
+            `Do NOT create or modify files unrelated to this task.`,
         });
       }
 
       const messages = this.session.buildRequest();
       const tools = this.session.tools.toOpenAIFormat();
+      const activeProvider: ChatProvider = this.provider;
 
-      // ─── Stream the model response ───────────────────────────
       let assistantText = "";
       const toolCalls: AgentToolCall[] = [];
       const toolCallMap = new Map<number, AgentToolCall>();
-      const activeProvider: ChatProvider = this.provider;
 
+      // ─── Stream the model response ───────────────────────────
       try {
         const stream = activeProvider.stream(
           messages as Message[],
@@ -84,7 +95,7 @@ export class AgentLoop {
         if (isRateLimit && this.fallbackProvider) {
           yield {
             type: "error",
-            message: "Rate limited — falling back to OpenRouter…",
+            message: "Rate limited — falling back to the other provider…",
           };
           try {
             const fallbackStream = this.fallbackProvider.stream(
@@ -161,7 +172,7 @@ export class AgentLoop {
             content:
               `Your previous response attempted to call a tool that does not exist. ` +
               `Valid tools are: list_dir, read_file, write_file, edit_file, move_file, ` +
-              `delete_file, glob, grep, bash, merge_files, write_plan, run_verification, done. ` +
+              `delete_file, glob, grep, bash, merge_files, write_plan, done. ` +
               `Do not use prefixes like "repo_browser.". Try again with a correct tool name.`,
           });
           yield {
@@ -186,32 +197,49 @@ export class AgentLoop {
             type: "function",
             function: {
               name: "done",
-              arguments: JSON.stringify({ summary: leaked.summary }),
+              arguments: JSON.stringify({ status: leaked.summary }),
             },
           });
           assistantText = leaked.summary;
         }
       }
 
-      // ─── No tool calls → natural-language answer ─────────────
+      // ─── No tool calls ───────────────────────────────────────
       if (toolCalls.length === 0) {
-        let content = assistantText.trim();
+        const content = assistantText.trim();
 
-        const leaked = detectLeakedDone(content);
-        if (leaked) content = leaked.summary;
+        // If we already made changes this prompt, a text-only reply means
+        // the model is done. Exit cleanly instead of looping.
+        const alreadyChanged =
+          this.session.memory.filesWritten.size > 0 ||
+          this.session.memory.filesDeleted.size > 0;
 
+        if (alreadyChanged) {
+          this.session.addAssistant({ role: "assistant", content });
+          yield { type: "assistant_message", content };
+          yield {
+            type: "done",
+            summary: content || "Task completed.",
+            iterations: iteration,
+          };
+          return;
+        }
+
+        // Otherwise, if the user asked for a change but the model only talked,
+        // nudge it once.
         if (iteration === 1 && userAskedForChange) {
           this.session.addAssistant({ role: "assistant", content });
           this.session.addToolResult({
             role: "user",
             content:
               `You replied with text, but the user asked for a change. ` +
-              `Use a tool now. For example: write_file with path="src/greet.ts" ` +
-              `and content='export function greet() { return "hello"; }'.`,
+              `Use a tool now. For example: write_file with path="index.html" ` +
+              `and content='<!DOCTYPE html>...'.`,
           });
           continue;
         }
 
+        // Pure chat — just answer.
         this.session.addAssistant({ role: "assistant", content });
         yield { type: "assistant_message", content };
         yield {
@@ -303,22 +331,6 @@ export class AgentLoop {
         yield { type: "tool_result", result };
       }
 
-      // ─── Collapse duplicate run_verification calls ──────────
-      const verifyCalls = runResults.filter(
-        (r) => r.toolName === "run_verification",
-      );
-      if (verifyCalls.length > 1) {
-        // Only the first result is kept; the rest were redundant.
-        // We don't need to do anything here — the model already saw
-        // multiple results — but we can nudge it in the next turn.
-        this.session.addToolResult({
-          role: "user",
-          content:
-            `You called run_verification ${verifyCalls.length} times in one turn. ` +
-            `Do not call it more than once per turn.`,
-        });
-      }
-
       // ─── Malformed tool arguments → ask the model to retry ──
       const isParseFail = (r: ToolResult) =>
         !r.ok &&
@@ -334,8 +346,7 @@ export class AgentLoop {
           role: "user",
           content:
             `Your done call had malformed JSON. The correct arguments are exactly: ` +
-            `{"status":"<one-line summary>"}. Do not wrap in markdown, do not ` +
-            `add extra fields, and use double quotes.`,
+            `{"status":"<one-line summary>"}. Do not wrap in markdown, use double quotes.`,
         });
         yield {
           type: "error",
@@ -361,63 +372,62 @@ export class AgentLoop {
         continue;
       }
 
-      // ─── Verification gate ───────────────────────────────────
-      const changesMade =
-        this.session.memory.filesWritten.size > 0 ||
-        this.session.memory.filesDeleted.size > 0;
-
-      const verificationPassed =
-        this.session.memory.verification !== null &&
-        this.session.memory.verification.passed === true;
-
-      const justVerifiedSuccessfully = runResults.some(
+      // ─── Auto-verify after any successful file change ────────
+      const madeFileChanges = runResults.some(
         (r) =>
-          r.toolName === "run_verification" &&
           r.ok &&
-          Boolean((r.data as { passed?: boolean } | undefined)?.passed),
+          ["write_file", "edit_file", "move_file", "delete_file"].includes(
+            r.toolName,
+          ),
       );
 
-      const justVerified = runResults.some(
-        (r) => r.toolName === "run_verification",
-      );
-
-      const doneResult = runResults.find((r) => r.toolName === "done");
-
-      // Block done when files were changed but verification has not passed.
-      if (
-        doneResult &&
-        changesMade &&
-        !verificationPassed &&
-        !justVerifiedSuccessfully
-      ) {
-        this.session.addToolResult({
-          role: "user",
-          content:
-            `You are trying to finish but you changed files and have NOT ` +
-            `successfully run run_verification. Call run_verification now. ` +
-            `If it fails, fix the specific errors it reports, then run it again. ` +
-            `Do not call done until run_verification passes.`,
-        });
-        yield {
-          type: "error",
-          message:
-            "Blocked: unverified changes. Running verification is required.",
+      if (madeFileChanges) {
+        const verifyCall: AgentToolCall = {
+          id: `auto_verify_${iteration}`,
+          type: "function",
+          function: { name: "run_verification", arguments: "{}" },
         };
-        continue;
+
+        yield {
+          type: "tool_call_start",
+          toolCallId: verifyCall.id,
+          toolName: "run_verification",
+          args: {},
+        };
+
+        const verifyResults = await this.toolRunner.runAll(
+          [verifyCall],
+          this.session.tools,
+        );
+
+        for (const result of verifyResults) {
+          this.session.addToolResult({
+            role: "tool",
+            tool_call_id: result.toolCallId,
+            name: result.toolName,
+            content: formatToolResultForModel(result),
+          });
+          this.recordMemory(result);
+          yield { type: "tool_result", result };
+          runResults.push(result);
+        }
+
+        // If verification failed, nudge the model to fix the errors.
+        const verifyFailed = verifyResults.find((r) => !r.ok);
+        if (verifyFailed) {
+          this.session.addToolResult({
+            role: "user",
+            content:
+              `Verification failed. Fix the errors shown above using edit_file ` +
+              `or write_file, then continue. Do NOT try to run verification ` +
+              `yourself — the loop does that automatically after every change.`,
+          });
+          continue;
+        }
       }
 
-      // If verification just failed, remind the model to fix the errors.
-      if (justVerified && !justVerifiedSuccessfully) {
-        this.session.addToolResult({
-          role: "user",
-          content:
-            `Verification failed. Read the check output above. ` +
-            `Use read_file to see the failing file, fix the specific problem ` +
-            `with edit_file or write_file, then run run_verification again. ` +
-            `Do NOT repeatedly run verification without editing.`,
-        });
-      }
-
+      // ─── done() ──────────────────────────────────────────────
+      const doneResult = runResults.find((r) => r.toolName === "done");
       if (doneResult) {
         const data = doneResult.data as
           | { summary?: string; status?: string }
@@ -428,7 +438,7 @@ export class AgentLoop {
         return;
       }
 
-      // ─── Nudge: model only explored, didn't act ──────────────
+      // ─── Nudge: only explored, didn't act ────────────────────
       const readOnlyTools = new Set(["list_dir", "read_file", "glob", "grep"]);
       const didOnlyRead =
         runResults.length > 0 &&
@@ -439,19 +449,19 @@ export class AgentLoop {
           content:
             `You explored the workspace but have not made any changes yet. ` +
             `The user asked you to: "${prompt}". ` +
-            `Now use write_file, edit_file, move_file, or delete_file to actually ` +
-            `complete the request. Do not call list_dir or read_file again unless absolutely necessary.`,
+            `Now use write_file, edit_file, move_file, or delete_file to complete it.`,
         });
         continue;
       }
 
       // ─── No-progress detection ───────────────────────────────
-      const writeActions = runResults.filter((r) =>
-        ["write_file", "edit_file", "move_file", "delete_file"].includes(
-          r.toolName,
-        ),
+      const writeSucceeded = runResults.some(
+        (r) =>
+          r.ok &&
+          ["write_file", "edit_file", "move_file", "delete_file"].includes(
+            r.toolName,
+          ),
       );
-      const writeSucceeded = writeActions.some((r) => r.ok);
 
       if (writeSucceeded) {
         stalledRounds = 0;
