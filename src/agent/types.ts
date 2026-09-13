@@ -108,11 +108,13 @@ export type AgentEvent =
 export interface AgentLoopOptions {
   maxIterations: number;
   maxToolRoundsWithoutProgress: number;
+  maxQaIterations?: number;
   verbose: boolean;
 }
 
 export const DEFAULT_LOOP_OPTIONS: AgentLoopOptions = {
   maxIterations: 12,
   maxToolRoundsWithoutProgress: 2,
+  maxQaIterations: 5,
   verbose: false,
 };

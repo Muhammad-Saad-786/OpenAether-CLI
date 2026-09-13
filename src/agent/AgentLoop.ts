@@ -5,19 +5,6 @@ import { ToolRunner } from "./ToolRunner.js";
 import type { ChatProvider } from "../provider/types.js";
 import type { Message } from "../provider/types.js";
 
-/**
- * The heart of OpenAether. A single loop:
- *   1. Build request (with memory + repo summary)
- *   2. Stream the model response
- *   3. If no tool calls → treat as completion (or done)
- *   4. Execute tool calls
- *   5. If any file changed → run verification automatically
- *   6. If verification failed → nudge the model to fix
- *   7. Repeat until done
- *
- * Verification is owned by the loop, not the model. The model never sees
- * the run_verification tool — it's hidden from the tool list.
- */
 export class AgentLoop {
   private readonly toolRunner = new ToolRunner();
 
@@ -90,7 +77,6 @@ export class AgentLoop {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
 
-        // ─── Rate-limit fallback ─────────────────────────────
         const isRateLimit = activeProvider.isRateLimitError(err);
         if (isRateLimit && this.fallbackProvider) {
           yield {
@@ -172,7 +158,8 @@ export class AgentLoop {
             content:
               `Your previous response attempted to call a tool that does not exist. ` +
               `Valid tools are: list_dir, read_file, write_file, edit_file, move_file, ` +
-              `delete_file, glob, grep, bash, merge_files, write_plan, done. ` +
+              `delete_file, glob, grep, find_symbol, search_symbols, bash, merge_files, ` +
+              `write_plan, done. ` +
               `Do not use prefixes like "repo_browser.". Try again with a correct tool name.`,
           });
           yield {
@@ -208,8 +195,6 @@ export class AgentLoop {
       if (toolCalls.length === 0) {
         const content = assistantText.trim();
 
-        // If we already made changes this prompt, a text-only reply means
-        // the model is done. Exit cleanly instead of looping.
         const alreadyChanged =
           this.session.memory.filesWritten.size > 0 ||
           this.session.memory.filesDeleted.size > 0;
@@ -225,8 +210,6 @@ export class AgentLoop {
           return;
         }
 
-        // Otherwise, if the user asked for a change but the model only talked,
-        // nudge it once.
         if (iteration === 1 && userAskedForChange) {
           this.session.addAssistant({ role: "assistant", content });
           this.session.addToolResult({
@@ -239,7 +222,6 @@ export class AgentLoop {
           continue;
         }
 
-        // Pure chat — just answer.
         this.session.addAssistant({ role: "assistant", content });
         yield { type: "assistant_message", content };
         yield {
@@ -327,7 +309,7 @@ export class AgentLoop {
           name: result.toolName,
           content: formatToolResultForModel(result),
         });
-        this.recordMemory(result);
+        await this.recordMemory(result);
         yield { type: "tool_result", result };
       }
 
@@ -407,12 +389,11 @@ export class AgentLoop {
             name: result.toolName,
             content: formatToolResultForModel(result),
           });
-          this.recordMemory(result);
+          await this.recordMemory(result);
           yield { type: "tool_result", result };
           runResults.push(result);
         }
 
-        // If verification failed, nudge the model to fix the errors.
         const verifyFailed = verifyResults.find((r) => !r.ok);
         if (verifyFailed) {
           this.session.addToolResult({
@@ -439,7 +420,14 @@ export class AgentLoop {
       }
 
       // ─── Nudge: only explored, didn't act ────────────────────
-      const readOnlyTools = new Set(["list_dir", "read_file", "glob", "grep"]);
+      const readOnlyTools = new Set([
+        "list_dir",
+        "read_file",
+        "glob",
+        "grep",
+        "find_symbol",
+        "search_symbols",
+      ]);
       const didOnlyRead =
         runResults.length > 0 &&
         runResults.every((r) => readOnlyTools.has(r.toolName));
@@ -455,35 +443,41 @@ export class AgentLoop {
       }
 
       // ─── No-progress detection ───────────────────────────────
-      const writeSucceeded = runResults.some(
-        (r) =>
-          r.ok &&
-          ["write_file", "edit_file", "move_file", "delete_file"].includes(
-            r.toolName,
-          ),
-      );
+      if (userAskedForChange) {
+        const writeSucceeded = runResults.some(
+          (r) =>
+            r.ok &&
+            ["write_file", "edit_file", "move_file", "delete_file"].includes(
+              r.toolName,
+            ),
+        );
 
-      if (writeSucceeded) {
-        stalledRounds = 0;
+        if (writeSucceeded) {
+          stalledRounds = 0;
+        } else {
+          stalledRounds++;
+        }
+
+        if (stalledRounds >= this.options.maxToolRoundsWithoutProgress) {
+          yield {
+            type: "done",
+            summary: `Stopped after ${stalledRounds} iterations with no file changes.`,
+            iterations: iteration,
+          };
+          return;
+        }
       } else {
-        stalledRounds++;
-      }
-
-      if (stalledRounds >= this.options.maxToolRoundsWithoutProgress) {
-        yield {
-          type: "done",
-          summary: `Stopped after ${stalledRounds} iterations with no file changes.`,
-          iterations: iteration,
-        };
-        return;
+        const qaCap = this.options.maxQaIterations ?? 5;
+        if (iteration >= qaCap) {
+          yield {
+            type: "done",
+            summary: "Answered the question.",
+            iterations: iteration,
+          };
+          return;
+        }
       }
     }
-
-    yield {
-      type: "done",
-      summary: `Reached maximum iterations (${this.options.maxIterations}).`,
-      iterations: this.options.maxIterations,
-    };
   }
 
   private consumeChunk(
@@ -518,7 +512,7 @@ export class AgentLoop {
     }
   }
 
-  private recordMemory(result: ToolResult): void {
+  private async recordMemory(result: ToolResult): Promise<void> {
     const m = this.session.memory;
     const path = (result.data as { path?: string } | undefined)?.path;
 
@@ -531,15 +525,22 @@ export class AgentLoop {
         m.filesWritten.add(path);
       if (result.toolName === "delete_file" && path) m.filesDeleted.add(path);
 
-      // Refresh the symbol index for the changed file.
+      // Refresh the symbol index for changed files.
       if (
         path &&
         ["write_file", "edit_file", "delete_file", "move_file"].includes(
           result.toolName,
         )
       ) {
-        // Fire-and-forget — we don't block the loop on index refresh.
-        void this.session.symbolIndex.refreshFile(path);
+        await this.session.symbolIndex.refreshFile(path);
+      }
+
+      // move_file affects two paths — refresh the destination too.
+      if (result.toolName === "move_file") {
+        const to = (result.data as { to?: string } | undefined)?.to;
+        if (to) {
+          await this.session.symbolIndex.refreshFile(to);
+        }
       }
 
       if (result.toolName === "bash") {
