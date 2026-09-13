@@ -303,6 +303,22 @@ export class AgentLoop {
         yield { type: "tool_result", result };
       }
 
+      // ─── Collapse duplicate run_verification calls ──────────
+      const verifyCalls = runResults.filter(
+        (r) => r.toolName === "run_verification",
+      );
+      if (verifyCalls.length > 1) {
+        // Only the first result is kept; the rest were redundant.
+        // We don't need to do anything here — the model already saw
+        // multiple results — but we can nudge it in the next turn.
+        this.session.addToolResult({
+          role: "user",
+          content:
+            `You called run_verification ${verifyCalls.length} times in one turn. ` +
+            `Do not call it more than once per turn.`,
+        });
+      }
+
       // ─── Malformed tool arguments → ask the model to retry ──
       const isParseFail = (r: ToolResult) =>
         !r.ok &&
@@ -435,18 +451,18 @@ export class AgentLoop {
           r.toolName,
         ),
       );
-      if (writeActions.length > 0) {
+      const writeSucceeded = writeActions.some((r) => r.ok);
+
+      if (writeSucceeded) {
         stalledRounds = 0;
       } else {
-        const anySuccess = runResults.some((r) => r.ok);
-        if (!anySuccess) stalledRounds++;
-        else stalledRounds = 0;
+        stalledRounds++;
       }
 
       if (stalledRounds >= this.options.maxToolRoundsWithoutProgress) {
         yield {
           type: "done",
-          summary: `No progress after ${stalledRounds} failed rounds. Stopping.`,
+          summary: `Stopped after ${stalledRounds} iterations with no file changes.`,
           iterations: iteration,
         };
         return;

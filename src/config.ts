@@ -24,7 +24,7 @@ const DEFAULTS = {
   openrouterModel: "cohere/north-mini-code:free",
   groqMaxTokens: 8000,
   openrouterMaxTokens: 8000,
-  groqTemperature: 0.4,
+  groqTemperature: 0.3,
   openrouterTemperature: 0.5,
   siteUrl: "http://localhost:3000",
   appName: "OpenAether CLI",

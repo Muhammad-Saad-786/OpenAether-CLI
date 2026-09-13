@@ -112,7 +112,7 @@ export interface AgentLoopOptions {
 }
 
 export const DEFAULT_LOOP_OPTIONS: AgentLoopOptions = {
-  maxIterations: 25,
-  maxToolRoundsWithoutProgress: 5,
+  maxIterations: 12,
+  maxToolRoundsWithoutProgress: 2,
   verbose: false,
 };

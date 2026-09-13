@@ -75,8 +75,10 @@ export class VerificationTool implements Tool<Input> {
         ok: true,
         toolName: "run_verification",
         toolCallId: "",
-        summary: "No verification checks configured for this project.",
-        data: { checks: [] },
+        summary:
+          "Nothing to verify — this project has no typecheck/lint/build/test scripts. " +
+          "Do NOT call run_verification again. If the task is complete, call done now.",
+        data: { checks: [], skipped: true },
       };
     }
 
