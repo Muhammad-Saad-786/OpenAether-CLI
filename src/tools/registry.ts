@@ -13,6 +13,9 @@ import { WritePlanTool } from "./write-plan.js";
 import { VerificationTool } from "./verification.js";
 import { FindSymbolTool } from "./find-symbol.js";
 import { SearchSymbolsTool } from "./search-symbols.js";
+import { BrowserTool } from "./browser.js";
+import { DevServerTool } from "./dev-server.js";
+import { AssetsTool } from "./assets.js";
 import type { AnyTool } from "./types.js";
 import type { SymbolIndex } from "../agent/symbolIndex.js";
 /**
@@ -39,6 +42,9 @@ export class ToolRegistry {
       new WritePlanTool(),
       new VerificationTool(),
       new DoneTool(),
+      new BrowserTool(),
+        new DevServerTool(),
+        new AssetsTool(),
     ]) {
       this.register(tool);
     }

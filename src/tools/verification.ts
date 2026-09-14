@@ -66,6 +66,10 @@ export class VerificationTool implements Tool<Input> {
       plan.push({ name: "test", command: "npm test -- --runInBand" });
     }
 
+    if (!plan.length && await fileExists(path.join(cwd, "index.html"))) {
+      plan.push({ name: "build", command: "node --check ./index.js" });
+    }
+
     const requested = input.only?.length
       ? plan.filter((p) => input.only!.includes(p.name))
       : plan;
@@ -76,8 +80,7 @@ export class VerificationTool implements Tool<Input> {
         toolName: "run_verification",
         toolCallId: "",
         summary:
-          "Nothing to verify — this project has no typecheck/lint/build/test scripts. " +
-          "Do NOT call run_verification again. If the task is complete, call done now.",
+          "No automated checks are configured. Source changes still require browser or manual review before done.",
         data: { checks: [], skipped: true },
       };
     }

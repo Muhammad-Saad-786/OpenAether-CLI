@@ -461,7 +461,7 @@ export class AgentLoop {
         if (stalledRounds >= this.options.maxToolRoundsWithoutProgress) {
           yield {
             type: "done",
-            summary: `Stopped after ${stalledRounds} iterations with no file changes.`,
+            summary: `No progress: stopped after ${stalledRounds} iterations with no file changes.`,
             iterations: iteration,
           };
           return;

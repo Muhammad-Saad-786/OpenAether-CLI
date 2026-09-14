@@ -13,7 +13,7 @@ export async function startCli(argv = process.argv): Promise<void> {
 
   const program = new Command()
     .name("openaether")
-    .description("OpenAether — an autonomous coding agent")
+    .description("OpenAether — an autonomous coding agent ")
     .version("4.0.0")
     .argument("[prompt]", "Prompt to send (one-shot mode)")
     .option("-p, --print", "Print one response and exit (one-shot mode)")

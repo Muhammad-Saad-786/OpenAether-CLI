@@ -1,7 +1,5 @@
 import chalk from "chalk";
 import type { Config } from "../config.js";
-import { useMemo } from "react";
-import { toolRegistry } from "../tools/registry.js";
 import { AgentSession } from "./AgentSession.js";
 import { AgentLoop } from "./AgentLoop.js";
 import { getAgentProvider } from "./providerAdapter.js";
@@ -12,16 +10,12 @@ export async function runAgentHeadless(
   config: Config,
   prompt: string,
 ): Promise<void> {
-  const session = useMemo(
-    () =>
-      new AgentSession({
-        systemPrompt: SYSTEM_PROMPT,
-        model: config.model,
-        maxTokens: config.maxTokens,
-        temperature: config.temperature,
-      }),
-    [config],
-  );
+  const session = new AgentSession({
+    systemPrompt: SYSTEM_PROMPT,
+    model: config.model,
+    maxTokens: config.maxTokens,
+    temperature: config.temperature,
+  });
 
   await session.initRepoMap(process.cwd());
 

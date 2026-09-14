@@ -93,7 +93,7 @@ async function main() {
     const events = await collect(loop.run("hello"));
     const done = events.find((e) => e.type === "done");
     if (!done) throw new Error("Test 1 failed: no done event");
-    if (!events.some((e) => e.type === "assistant_text"))
+    if (!events.some((e) => e.type === "assistant_message"))
       throw new Error("Test 1: no text");
     console.log("✅ Test 1 passed (plain chat)");
   }
@@ -214,7 +214,7 @@ async function main() {
       maxToolRoundsWithoutProgress: 2,
       verbose: false,
     });
-    const events = await collect(loop.run("try"));
+    const events = await collect(loop.run("try to fix it"));
     const done = events.find((e) => e.type === "done");
     if (!done || !("summary" in done) || !done.summary.includes("No progress"))
       throw new Error("Test 4: expected no-progress termination");
