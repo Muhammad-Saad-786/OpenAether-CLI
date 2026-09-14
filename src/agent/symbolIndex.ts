@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
 export interface Symbol {
@@ -115,7 +115,7 @@ function extractSymbols(filePath: string, relPath: string): Symbol[] {
   const symbols: Symbol[] = [];
   let content: string;
   try {
-    content = require("node:fs").readFileSync(filePath, "utf8");
+    content = readFileSync(filePath, "utf8");
   } catch {
     return symbols;
   }
