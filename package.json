@@ -18,7 +18,8 @@
     "chat": "tsx src/cli.ts --chat",
     "typecheck": "tsc --noEmit",
     "test:loop": "tsx src/agent/__tests__/loop.test.ts",
-    "test": "npm run test:loop",
+    "test:version": "tsx src/agent/__tests__/version.test.ts",
+    "test": "npm run typecheck && npm run test:version && npm run test:loop",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [
@@ -27,9 +28,11 @@
     "coding",
     "assistant",
     "openrouter",
+    "groq",
     "llm",
     "terminal",
-    "developer-tools"
+    "developer-tools",
+    "agent"
   ],
   "author": "Saad Asim",
   "license": "MIT",

@@ -21,7 +21,10 @@ export class DevServerTool implements Tool<Input> {
       action: { type: "string", enum: ["start", "stop", "status"] },
       command: { type: "string", description: "Command such as npm run dev." },
       port: { type: "number", description: "Port exposed by the server." },
-      url: { type: "string", description: "URL to probe, defaults to localhost:port." },
+      url: {
+        type: "string",
+        description: "URL to probe, defaults to localhost:port.",
+      },
     },
     required: ["action"],
   };
@@ -36,14 +39,21 @@ export class DevServerTool implements Tool<Input> {
           ok: Boolean(response?.ok),
           toolName: this.name,
           toolCallId: "",
-          summary: response?.ok ? `Server is ready at ${url}` : `No server responded at ${url}`,
-          data: { url, running: Boolean(response?.ok), status: response?.status ?? null },
+          summary: response?.ok
+            ? `Server is ready at ${url}`
+            : `No server responded at ${url}`,
+          data: {
+            url,
+            running: Boolean(response?.ok),
+            status: response?.status ?? null,
+          },
         };
       }
 
       if (input.action === "stop") {
         const child = servers.get(port);
-        if (!child?.pid) return fail(`No OpenAether server is tracked on port ${port}`);
+        if (!child?.pid)
+          return fail(`No OpenAether server is tracked on port ${port}`);
         child.kill();
         servers.delete(port);
         return {
@@ -55,8 +65,10 @@ export class DevServerTool implements Tool<Input> {
         };
       }
 
-      if (!input.command?.trim()) return fail("command is required when action=start");
-      if (servers.has(port)) return fail(`A server is already tracked on port ${port}`);
+      if (!input.command?.trim())
+        return fail("command is required when action=start");
+      if (servers.has(port))
+        return fail(`A server is already tracked on port ${port}`);
 
       const child = spawn(input.command, {
         cwd: process.cwd(),
@@ -70,7 +82,9 @@ export class DevServerTool implements Tool<Input> {
       while (Date.now() < deadline) {
         if (child.exitCode !== null) {
           servers.delete(port);
-          return fail(`Dev server exited before becoming ready (code ${child.exitCode})`);
+          return fail(
+            `Dev server exited before becoming ready (code ${child.exitCode})`,
+          );
         }
         const response = await fetch(url).catch(() => null);
         if (response?.ok) {
@@ -95,4 +109,3 @@ export function stopTrackedServers(): void {
   for (const child of servers.values()) child.kill();
   servers.clear();
 }
-

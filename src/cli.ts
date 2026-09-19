@@ -5,6 +5,7 @@ import { startRepl } from "./repl.js";
 import { formatProviderError } from "./utils/errors.js";
 import { loadSavedEnvironment, runFirstRunSetup } from "./setup.js";
 import { runAgentHeadless } from "./agent/headless.js";
+import { VERSION } from "./version.js";
 
 export async function startCli(argv = process.argv): Promise<void> {
   loadSavedEnvironment();
@@ -13,8 +14,8 @@ export async function startCli(argv = process.argv): Promise<void> {
 
   const program = new Command()
     .name("openaether")
-    .description("OpenAether — an autonomous coding agent ")
-    .version("4.0.0")
+    .description("OpenAether — an autonomous coding agent built by Saad Asim ")
+    .version(VERSION)
     .argument("[prompt]", "Prompt to send (one-shot mode)")
     .option("-p, --print", "Print one response and exit (one-shot mode)")
     .option("-c, --chat", "Start interactive chat mode (default)")

@@ -3,7 +3,16 @@ import path from "node:path";
 import { fail, type Tool, type ToolResult } from "./types.js";
 import { workspacePath } from "./workspace.js";
 
-const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".avif", ".ico"]);
+const IMAGE_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".svg",
+  ".avif",
+  ".ico",
+]);
 
 type Input = { action: "inventory" | "prepare"; directory?: string };
 
@@ -16,7 +25,11 @@ export class AssetsTool implements Tool<Input> {
     type: "object",
     properties: {
       action: { type: "string", enum: ["inventory", "prepare"] },
-      directory: { type: "string", description: "Workspace-relative asset directory, defaults to public/assets." },
+      directory: {
+        type: "string",
+        description:
+          "Workspace-relative asset directory, defaults to public/assets.",
+      },
     },
     required: ["action"],
   };
@@ -28,13 +41,20 @@ export class AssetsTool implements Tool<Input> {
       await fs.mkdir(assetPath, { recursive: true });
       const entries = await fs.readdir(assetPath, { withFileTypes: true });
       const assets = entries
-        .filter((entry) => entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()),
+        )
         .map((entry) => path.join(directory, entry.name).replaceAll("\\", "/"));
       return {
         ok: true,
         toolName: this.name,
         toolCallId: "",
-        summary: input.action === "prepare" ? `Prepared ${directory} (${assets.length} existing assets)` : `Found ${assets.length} image assets in ${directory}`,
+        summary:
+          input.action === "prepare"
+            ? `Prepared ${directory} (${assets.length} existing assets)`
+            : `Found ${assets.length} image assets in ${directory}`,
         data: { directory, assets, prepared: true },
       };
     } catch (error) {

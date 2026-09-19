@@ -4,6 +4,7 @@ import type { AgentSession } from "./AgentSession.js";
 import { ToolRunner } from "./ToolRunner.js";
 import type { ChatProvider } from "../provider/types.js";
 import type { Message } from "../provider/types.js";
+import { json } from "stream/consumers";
 
 export class AgentLoop {
   private readonly toolRunner = new ToolRunner();
@@ -367,14 +368,17 @@ export class AgentLoop {
         const verifyCall: AgentToolCall = {
           id: `auto_verify_${iteration}`,
           type: "function",
-          function: { name: "run_verification", arguments: "{}" },
+          function: {
+            name: "run_verification",
+            arguments: JSON.stringify({ task: prompt }),
+          },
         };
 
         yield {
           type: "tool_call_start",
           toolCallId: verifyCall.id,
           toolName: "run_verification",
-          args: {},
+          args: { task: prompt },
         };
 
         const verifyResults = await this.toolRunner.runAll(

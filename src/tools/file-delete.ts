@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fail, ok, type Tool, type ToolResult } from "./types.js";
 import { workspacePath } from "./workspace.js";
+import { invalidateReadCache } from "./file-read.js";
 
 type Input = { path: string; confirm?: boolean };
 
@@ -30,6 +31,8 @@ export class FileDeleteTool implements Tool<Input> {
       const stats = await fs.stat(filePath);
       if (!stats.isFile()) return fail("Refusing to delete a directory");
       await fs.unlink(filePath);
+      invalidateReadCache(filePath);
+
       return ok(`Deleted ${filePath}`);
     } catch (error) {
       return fail(error);

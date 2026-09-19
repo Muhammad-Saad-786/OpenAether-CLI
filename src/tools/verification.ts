@@ -6,8 +6,8 @@ import type { Tool, ToolResult } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
-type CheckName = "typecheck" | "lint" | "build" | "test";
-type Input = { only?: CheckName[]; cwd?: string };
+type CheckName = "typecheck" | "lint" | "build" | "test" | "start";
+type Input = { only?: CheckName[]; cwd?: string; task?: string };
 
 interface CheckResult {
   name: CheckName;
@@ -15,12 +15,16 @@ interface CheckResult {
   passed: boolean;
   output: string;
   durationMs: number;
+  exitCode: number;
 }
+
+const START_INTENT =
+  /\b(npm\s+run\s+start|npm\s+start|yarn\s+start|pnpm\s+start|launch|start\s+the\s+app|run\s+the\s+app|run\s+the\s+project|node\s+\S+\.(?:js|mjs|cjs|ts))\b/i;
 
 export class VerificationTool implements Tool<Input> {
   name = "run_verification";
   description =
-    "Run the project's verification pipeline (typecheck, lint, build, test). Call this BEFORE done whenever you have made code changes. Returns structured pass/fail per check with the exact errors.";
+    "Run the project's verification pipeline (typecheck, lint, build, test, start). Returns structured pass/fail per check with the exact errors. Called automatically by the agent loop after every file change.";
   sideEffect = "exec" as const;
   parameters = {
     type: "object",
@@ -29,10 +33,15 @@ export class VerificationTool implements Tool<Input> {
         type: "array",
         items: {
           type: "string",
-          enum: ["typecheck", "lint", "build", "test"],
+          enum: ["typecheck", "lint", "build", "test", "start"],
         },
         description:
           "Optional subset of checks to run. Defaults to all available.",
+      },
+      task: {
+        type: "string",
+        description:
+          "The current user request. Used to decide whether to run the start script.",
       },
     },
     required: [],
@@ -66,8 +75,12 @@ export class VerificationTool implements Tool<Input> {
       plan.push({ name: "test", command: "npm test -- --runInBand" });
     }
 
-    if (!plan.length && await fileExists(path.join(cwd, "index.html"))) {
-      plan.push({ name: "build", command: "node --check ./index.js" });
+    // Only run `start` when the task was specifically about launching the app.
+    const taskMentionsStart = input.task
+      ? START_INTENT.test(input.task)
+      : false;
+    if (scripts.start && taskMentionsStart) {
+      plan.push({ name: "start", command: "npm run start" });
     }
 
     const requested = input.only?.length
@@ -80,7 +93,8 @@ export class VerificationTool implements Tool<Input> {
         toolName: "run_verification",
         toolCallId: "",
         summary:
-          "No automated checks are configured. Source changes still require browser or manual review before done.",
+          "No verification checks are configured for this project. " +
+          "Do NOT call run_verification again. If the task is complete, call done now.",
         data: { checks: [], skipped: true },
       };
     }
@@ -91,6 +105,7 @@ export class VerificationTool implements Tool<Input> {
       const start = Date.now();
       let passed = true;
       let output = "";
+      let exitCode = 0;
 
       try {
         const isWindows = process.platform === "win32";
@@ -112,7 +127,9 @@ export class VerificationTool implements Tool<Input> {
           stdout?: string;
           stderr?: string;
           message?: string;
+          code?: number;
         };
+        exitCode = typeof e.code === "number" ? e.code : 1;
         output = `${e.stdout ?? ""}${e.stderr ?? e.message ?? ""}`.trim();
       }
 
@@ -122,10 +139,10 @@ export class VerificationTool implements Tool<Input> {
         passed,
         output: truncate(output, 4000),
         durationMs: Date.now() - start,
+        exitCode,
       });
 
-      // Stop on first failure — downstream checks can't meaningfully pass
-      // if an earlier one failed (build won't pass if typecheck fails).
+      // Stop on first failure.
       if (!passed) break;
     }
 
@@ -137,11 +154,17 @@ export class VerificationTool implements Tool<Input> {
       : results.flatMap((r) => extractFailingFiles(r.output));
 
     const summary = allPassed
-      ? `All checks passed (${results.length}): ${results.map((r) => r.name).join(", ")}`
+      ? `All checks passed (${results.length}): ${results
+          .map((r) => `${r.command} (exit 0)`)
+          .join(", ")}`
       : (() => {
           const unique = [...new Set(failingFiles)];
           if (unique.length > 0) {
-            return `${failureCount} of ${results.length} checks failed — files: ${unique.slice(0, 5).join(", ")}${unique.length > 5 ? ` (+${unique.length - 5} more)` : ""}`;
+            return `${failureCount} of ${results.length} checks failed — files: ${unique
+              .slice(0, 5)
+              .join(
+                ", ",
+              )}${unique.length > 5 ? ` (+${unique.length - 5} more)` : ""}`;
           }
           const firstFail = results.find((r) => !r.passed);
           const snippet = (firstFail?.output ?? "")
@@ -150,6 +173,7 @@ export class VerificationTool implements Tool<Input> {
             .join(" / ");
           return `${failureCount} of ${results.length} checks failed — ${snippet || "see errors"}`;
         })();
+
     return {
       ok: allPassed,
       toolName: "run_verification",
@@ -189,24 +213,6 @@ async function readPackageScripts(
   }
 }
 
-async function getChangedTsFiles(cwd: string): Promise<string[]> {
-  try {
-    const isWindows = process.platform === "win32";
-    const shell = isWindows ? "cmd.exe" : "/bin/sh";
-    const args = isWindows
-      ? ["/d", "/s", "/c", "git status --porcelain"]
-      : ["-lc", "git status --porcelain"];
-
-    const { stdout } = await execFileAsync(shell, args, { cwd });
-    return stdout
-      .split("\n")
-      .map((line) => line.slice(3).trim())
-      .filter((p) => p.endsWith(".ts") || p.endsWith(".tsx"));
-  } catch {
-    return [];
-  }
-}
-
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max) + `\n... [truncated ${s.length - max} chars]`;
@@ -214,15 +220,12 @@ function truncate(s: string, max: number): string {
 
 function extractFailingFiles(output: string): string[] {
   const files = new Set<string>();
-  // tsc: src/foo.ts(12,5): error TS1234: ...
   const tscRe = /^([^\s(]+)\(\d+,\d+\):\s*error/gm;
-  // eslint: /path/to/foo.ts\n  12:5  error  ...
   const eslintRe = /^\s*(\S+\.(?:ts|tsx|js|jsx|mjs|cjs))\s*$/gm;
 
   let m: RegExpExecArray | null;
   while ((m = tscRe.exec(output)) !== null) files.add(m[1]);
   while ((m = eslintRe.exec(output)) !== null) {
-    // only keep paths that look like file paths (contain / or \)
     if (m[1].includes("/") || m[1].includes("\\")) files.add(m[1]);
   }
   return [...files];

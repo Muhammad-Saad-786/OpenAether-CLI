@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fail, ok, type Tool, type ToolResult } from "./types.js";
 import { workspacePath } from "./workspace.js";
+import { invalidateReadCache } from "./file-read.js";
 
 type Input = {
   path: string;
@@ -83,6 +84,7 @@ export class FileWriteTool implements Tool<Input> {
 
       const previous = existed ? await fs.readFile(filePath, "utf8") : "";
       await fs.writeFile(filePath, input.content, "utf8");
+      invalidateReadCache(filePath);
 
       const diff = existed ? makeDiff(previous, input.content) : undefined;
 

@@ -1,4 +1,6 @@
-import type { AgentMessage, AgentMemory, AgentTool } from "./types.js";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import type { AgentMessage, AgentMemory } from "./types.js";
 import { createMemory } from "./types.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { MemoryCompressor } from "./memory.js";
@@ -23,6 +25,7 @@ export class AgentSession {
   private readonly compressor = new MemoryCompressor(8);
   private repoMap: RepoMap | null = null;
   private repoSummary = "";
+  private isGitRepo = false;
 
   constructor(config: SessionConfig, goal = "", registry?: ToolRegistry) {
     this.config = config;
@@ -39,8 +42,16 @@ export class AgentSession {
     if (this.repoMap) return;
     this.repoMap = await scanRepo(cwd);
     this.repoSummary = formatRepoMap(this.repoMap);
-    // Build the symbol index once, at session start.
     await this.symbolIndex.build();
+
+    // Detect whether the workspace is a git repository once. This affects
+    // whether `/undo` and diff rendering are available.
+    try {
+      await fs.access(path.join(cwd, ".git"));
+      this.isGitRepo = true;
+    } catch {
+      this.isGitRepo = false;
+    }
   }
 
   setGoal(goal: string): void {
@@ -74,16 +85,10 @@ export class AgentSession {
       content: parts.join("\n\n"),
     };
 
-    // Compress older messages.
     const compressed = this.compressor.compress([
       systemMessage,
       ...this.messages.slice(1),
     ]);
-
-    //After 10 turns, compressed count bounded by 10 messages, so we can keep the last 10 messages in memory.
-    console.error(
-      `[session] sending ${compressed.length} messages (total history: ${this.messages.length})`,
-    );
 
     return compressed;
   }
@@ -106,7 +111,13 @@ export class AgentSession {
       );
     if (m.plan) parts.push(`Plan:\n${m.plan}`);
 
-    // Add the top exports from the symbol index.
+    if (!this.isGitRepo) {
+      parts.push(
+        "Workspace: not a git repository. Native diffs and `/undo` are unavailable; " +
+          "the agent should describe file changes in text rather than relying on git.",
+      );
+    }
+
     if (this.symbolIndex.isBuilt()) {
       const top = this.symbolIndex.topExports(30);
       if (top.length) {

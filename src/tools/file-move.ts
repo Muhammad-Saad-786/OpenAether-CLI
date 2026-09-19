@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fail, type Tool, type ToolResult } from "./types.js";
 import { workspacePath } from "./workspace.js";
+import { invalidateReadCache } from "./file-read.js";
 
 type Input = { from: string; to: string; overwrite?: boolean };
 
@@ -41,6 +42,8 @@ export class FileMoveTool implements Tool<Input> {
 
       await fs.mkdir(path.dirname(dest), { recursive: true });
       await fs.rename(src, dest);
+      invalidateReadCache(src);
+      invalidateReadCache(dest);
 
       return {
         ok: true,

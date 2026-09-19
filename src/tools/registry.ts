@@ -43,8 +43,8 @@ export class ToolRegistry {
       new VerificationTool(),
       new DoneTool(),
       new BrowserTool(),
-        new DevServerTool(),
-        new AssetsTool(),
+      new DevServerTool(),
+      new AssetsTool(),
     ]) {
       this.register(tool);
     }
