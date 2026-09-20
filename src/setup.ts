@@ -7,7 +7,11 @@ import { config as loadDotenv } from "dotenv";
 const envPath = path.join(process.cwd(), ".env");
 
 function hasApiKeys(): boolean {
-  return Boolean(process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY);
+  return Boolean(
+    process.env.GROQ_API_KEY ||
+    process.env.OPENROUTER_API_KEY ||
+    process.env.MISTRAL_API_KEY,
+  );
 }
 
 function readSecret(prompt: string): Promise<string> {
@@ -58,7 +62,11 @@ function readSecret(prompt: string): Promise<string> {
   });
 }
 
-async function saveKeys(groqKey: string, openRouterKey: string): Promise<void> {
+async function saveKeys(
+  groqKey: string,
+  openRouterKey: string,
+  mistralKey: string,
+): Promise<void> {
   const existing = await fs.readFile(envPath, "utf8").catch(() => "");
   const values = new Map<string, string>();
   for (const line of existing.split(/\r?\n/)) {
@@ -67,6 +75,8 @@ async function saveKeys(groqKey: string, openRouterKey: string): Promise<void> {
   }
   if (groqKey) values.set("GROQ_API_KEY", groqKey);
   if (openRouterKey) values.set("OPENROUTER_API_KEY", openRouterKey);
+  if (mistralKey) values.set("MISTRAL_API_KEY", mistralKey);
+
   const content = `${[...values.entries()]
     .map(([key, value]) => `${key}=${value}`)
     .join("\n")}\n`;
@@ -84,10 +94,12 @@ export async function runFirstRunSetup(): Promise<void> {
 
   let groqKey = "";
   let openRouterKey = "";
+  let mistralKey = "";
+
   output.write(
     "\nOpenAether setup\n" +
       "Paste your API keys. Everything else (model, temperature, tokens) is\n" +
-      "auto-configured. You only need one key, but both work.\n" +
+      "auto-configured. You only need one key, but any combination works.\n" +
       "Your keys are saved to a .env file in this folder. Never commit it.\n\n",
   );
 
@@ -95,7 +107,7 @@ export async function runFirstRunSetup(): Promise<void> {
     const reader = createInterface({ input, output });
     const command = (
       await reader.question(
-        "[1] Enter Groq key  [2] Enter OpenRouter key  [s] Save  [q] Skip: ",
+        "[1] Groq  [2] OpenRouter  [3] Mistral  [s] Save  [q] Skip: ",
       )
     )
       .trim()
@@ -106,19 +118,22 @@ export async function runFirstRunSetup(): Promise<void> {
       groqKey = await readSecret("Groq API key: ");
     } else if (command === "2" || command === "openrouter") {
       openRouterKey = await readSecret("OpenRouter API key: ");
+    } else if (command === "3" || command === "mistral") {
+      mistralKey = await readSecret("Mistral API key: ");
     } else if (command === "/" || command === "/help") {
       output.write(
-        "Commands: 1 Groq, 2 OpenRouter, /save save keys, /skip continue without saving, /help show this menu\n",
+        "Commands: 1 Groq, 2 OpenRouter, 3 Mistral, " +
+          "/save save keys, /skip continue without saving, /help show this menu\n",
       );
     } else if (command === "s" || command === "/save" || command === "save") {
-      if (!groqKey && !openRouterKey) {
+      if (!groqKey && !openRouterKey && !mistralKey) {
         output.write("Enter at least one key before saving.\n");
         continue;
       }
-      await saveKeys(groqKey, openRouterKey);
+      await saveKeys(groqKey, openRouterKey, mistralKey);
       output.write(
         `Saved to ${envPath}.\n` +
-          `OpenAether will use Groq by default if you provided both keys.\n`,
+          `Provider is auto-detected: Groq if present, else OpenRouter, else Mistral.\n`,
       );
       return;
     } else if (command === "q" || command === "/skip" || command === "skip") {

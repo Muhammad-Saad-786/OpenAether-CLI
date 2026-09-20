@@ -174,7 +174,10 @@ function InteractiveRepl({ config }: { config: Config }) {
     if (key.escape && showModelPicker) setShowModelPicker(false);
   });
 
-  const switchProvider = (prov: "groq" | "openrouter", modelId: string) => {
+  const switchProvider = (
+    prov: "groq" | "openrouter" | "mistral",
+    modelId: string,
+  ) => {
     const nextConfig = { ...config, provider: prov, model: modelId } as Config;
     (session.config as any).model = modelId;
 
@@ -190,6 +193,9 @@ function InteractiveRepl({ config }: { config: Config }) {
       });
       fallbackModel = "cohere/north-mini-code:free";
     } else if (prov === "openrouter" && config.groqApiKey) {
+      fallbackProvider = getAgentProvider({ ...config, provider: "groq" });
+      fallbackModel = "openai/gpt-oss-120b";
+    } else if (prov === "mistral" && config.groqApiKey) {
       fallbackProvider = getAgentProvider({ ...config, provider: "groq" });
       fallbackModel = "openai/gpt-oss-120b";
     }
@@ -537,7 +543,8 @@ function InteractiveRepl({ config }: { config: Config }) {
               const sep = String(item.value).indexOf(":");
               const prov = String(item.value).slice(0, sep) as
                 | "groq"
-                | "openrouter";
+                | "openrouter"
+                | "mistral";
               const id = String(item.value).slice(sep + 1);
               switchProvider(prov, id);
               setShowModelPicker(false);

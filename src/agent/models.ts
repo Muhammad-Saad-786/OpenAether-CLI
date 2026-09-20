@@ -1,5 +1,5 @@
 export interface ModelOption {
-  provider: "groq" | "openrouter";
+  provider: "groq" | "openrouter" | "mistral";
   id: string;
   label: string;
   toolCalling: boolean;
@@ -131,7 +131,48 @@ export const OPENROUTER_FREE_MODELS: ModelOption[] = [
   },
 ];
 
+export const MISTRAL_MODELS: ModelOption[] = [
+  {
+    provider: "mistral",
+    id: "codestral-2508",
+    label: "Codestral (code)",
+    toolCalling: true,
+  },
+  {
+    provider: "mistral",
+    id: "ministral-3b-2512",
+    label: "Ministral 3B (12.5 RPS)",
+    toolCalling: true,
+  },
+  {
+    provider: "mistral",
+    id: "ministral-8b-2512",
+    label: "Ministral 8B (3.13 RPS)",
+    toolCalling: true,
+  },
+  {
+    provider: "mistral",
+    id: "ministral-14b-2512",
+    label: "Ministral 14B (0.5 RPS)",
+    toolCalling: true,
+  },
+  {
+    provider: "mistral",
+    id: "labs-leanstral-1-5-1",
+    label: "Leanstral 1.5 (5M TPM)",
+    toolCalling: true,
+  },
+  { provider: "mistral", id: "glm-5-2", label: "GLM 5.2", toolCalling: true },
+  {
+    provider: "mistral",
+    id: "zai-glm-5-3",
+    label: "Z.ai GLM 5.3",
+    toolCalling: true,
+  },
+];
+
 export const ALL_MODELS: ModelOption[] = [
   ...GROQ_MODELS,
+  ...MISTRAL_MODELS,
   ...OPENROUTER_FREE_MODELS,
 ];

@@ -1,15 +1,8 @@
-/**
- * Configuration loader.
- *
- * Users only need to provide API keys. Everything else has a sensible
- * default baked in here. Any of these can still be overridden via
- * environment variables — but they don't have to be.
- */
-
 export interface Config {
   apiKey: string;
   groqApiKey?: string;
-  provider: "openrouter" | "groq";
+  mistralApiKey?: string;
+  provider: "openrouter" | "groq" | "mistral";
   siteUrl: string;
   appName: string;
   model: string;
@@ -18,14 +11,16 @@ export interface Config {
   systemPrompt?: string;
 }
 
-// ─── Defaults ────────────────────────────────────────────────
 const DEFAULTS = {
   groqModel: "openai/gpt-oss-120b",
   openrouterModel: "cohere/north-mini-code:free",
+  mistralModel: "mistral-medium-3-5",
   groqMaxTokens: 8000,
   openrouterMaxTokens: 8000,
+  mistralMaxTokens: 8000,
   groqTemperature: 0.3,
-  openrouterTemperature: 0.5,
+  openrouterTemperature: 0.4,
+  mistralTemperature: 0.3,
   siteUrl: "http://localhost:3000",
   appName: "OpenAether CLI",
 } as const;
@@ -34,66 +29,73 @@ export function loadConfig(): Config {
   const explicitProvider = process.env.PROVIDER?.toLowerCase();
   const hasGroq = Boolean(process.env.GROQ_API_KEY);
   const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
+  const hasMistral = Boolean(process.env.MISTRAL_API_KEY);
 
-  // Provider selection:
-  //   1. Explicit PROVIDER env var wins.
-  //   2. If only one key is present, use that provider.
-  //   3. If both are present, prefer Groq (lower latency on free tier).
-  //   4. If neither, default to OpenRouter (will fail at request time, but
-  //      the setup wizard will have prompted for keys by then).
-  let provider: "openrouter" | "groq";
-  if (explicitProvider === "groq" || explicitProvider === "openrouter") {
+  let provider: "openrouter" | "groq" | "mistral";
+  if (
+    explicitProvider === "groq" ||
+    explicitProvider === "openrouter" ||
+    explicitProvider === "mistral"
+  ) {
     provider = explicitProvider;
-  } else if (hasGroq && !hasOpenRouter) {
+  } else if (hasMistral && !hasGroq && !hasOpenRouter) {
+    provider = "mistral";
+  } else if (hasGroq) {
     provider = "groq";
-  } else if (hasOpenRouter && !hasGroq) {
+  } else if (hasOpenRouter) {
     provider = "openrouter";
-  } else if (hasGroq && hasOpenRouter) {
-    provider = "groq";
   } else {
-    provider = "openrouter";
+    provider = "mistral";
   }
 
-  const isGroq = provider === "groq";
+  const defaults = {
+    groq: {
+      model: DEFAULTS.groqModel,
+      maxTokens: DEFAULTS.groqMaxTokens,
+      temperature: DEFAULTS.groqTemperature,
+      envModel: process.env.GROQ_MODEL,
+      envMaxTokens: process.env.GROQ_MAX_TOKENS,
+      envTemperature: process.env.GROQ_TEMPERATURE,
+    },
+    openrouter: {
+      model: DEFAULTS.openrouterModel,
+      maxTokens: DEFAULTS.openrouterMaxTokens,
+      temperature: DEFAULTS.openrouterTemperature,
+      envModel: process.env.OPENROUTER_MODEL,
+      envMaxTokens: process.env.OPENROUTER_MAX_TOKENS,
+      envTemperature: process.env.OPENROUTER_TEMPERATURE,
+    },
+    mistral: {
+      model: DEFAULTS.mistralModel,
+      maxTokens: DEFAULTS.mistralMaxTokens,
+      temperature: DEFAULTS.mistralTemperature,
+      envModel: process.env.MISTRAL_MODEL,
+      envMaxTokens: process.env.MISTRAL_MAX_TOKENS,
+      envTemperature: process.env.MISTRAL_TEMPERATURE,
+    },
+  }[provider];
 
-  const defaultModel = isGroq ? DEFAULTS.groqModel : DEFAULTS.openrouterModel;
-  const defaultMaxTokens = isGroq
-    ? DEFAULTS.groqMaxTokens
-    : DEFAULTS.openrouterMaxTokens;
-  const defaultTemperature = isGroq
-    ? DEFAULTS.groqTemperature
-    : DEFAULTS.openrouterTemperature;
-
-  const envModel = isGroq
-    ? process.env.GROQ_MODEL
-    : process.env.OPENROUTER_MODEL;
-  const envMaxTokens = isGroq
-    ? process.env.GROQ_MAX_TOKENS
-    : process.env.OPENROUTER_MAX_TOKENS;
-  const envTemperature = isGroq
-    ? process.env.GROQ_TEMPERATURE
-    : process.env.OPENROUTER_TEMPERATURE;
-
-  const maxTokens = envMaxTokens
-    ? Number.parseInt(envMaxTokens, 10)
-    : defaultMaxTokens;
-  const temperature = envTemperature
-    ? Number.parseFloat(envTemperature)
-    : defaultTemperature;
+  const maxTokens = defaults.envMaxTokens
+    ? Number.parseInt(defaults.envMaxTokens, 10)
+    : defaults.maxTokens;
+  const temperature = defaults.envTemperature
+    ? Number.parseFloat(defaults.envTemperature)
+    : defaults.temperature;
 
   return {
     apiKey: process.env.OPENROUTER_API_KEY || "",
     groqApiKey: process.env.GROQ_API_KEY || "",
+    mistralApiKey: process.env.MISTRAL_API_KEY || "",
     provider,
     siteUrl: process.env.OPENROUTER_SITE_URL || DEFAULTS.siteUrl,
     appName: process.env.OPENROUTER_APP_NAME || DEFAULTS.appName,
-    model: envModel || defaultModel,
+    model: defaults.envModel || defaults.model,
     maxTokens:
       Number.isFinite(maxTokens) && maxTokens > 0
         ? maxTokens
-        : defaultMaxTokens,
+        : defaults.maxTokens,
     temperature: Number.isFinite(temperature)
       ? temperature
-      : defaultTemperature,
+      : defaults.temperature,
   };
 }
